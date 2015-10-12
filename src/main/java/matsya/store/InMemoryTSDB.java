@@ -6,7 +6,10 @@ import matsya.tsdb.TSDB;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * InMemory implementation of TimeSeries Database for testing purposes.
@@ -37,4 +40,10 @@ public class InMemoryTSDB extends TSDB {
         }
         return values.toArray(new byte[0][]);
     }
+
+    @Override
+    public void flush() throws Exception { /* No Op */}
+
+    @Override
+    public void close() throws Exception { /* No Op */}
 }

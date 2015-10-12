@@ -10,7 +10,7 @@ abstract public class TSDB {
      * @param key
      * @param value
      */
-    public abstract void put(long timestamp, byte[] key, byte[] value) throws IOException;
+    public abstract void put(long timestamp, byte[] key, byte[] value) throws Exception;
 
     /**
      * Exactly same as {@link #put(long, byte[], byte[])} but assumes timestamp to be current milliseconds
@@ -18,7 +18,7 @@ abstract public class TSDB {
      * @param key
      * @param value
      */
-    public void put(byte[] key, byte[] value) throws IOException {
+    public void put(byte[] key, byte[] value) throws Exception {
         put(System.currentTimeMillis(), key, value);
     }
 
@@ -28,7 +28,7 @@ abstract public class TSDB {
      * @param key
      * @param value
      */
-    public void put(Key key, byte[] value) throws IOException {
+    public void put(Key key, byte[] value) throws Exception {
         put(key.getTimestamp(), key.getKey(), value);
     }
 
@@ -60,4 +60,16 @@ abstract public class TSDB {
      * @return
      */
     abstract public byte[][] scan(long start, long end, byte[] keyPrefix) throws Exception;
+
+    /**
+     * Triggers a flush on the underlying datastore
+     * @throws Exception
+     */
+    abstract public void flush() throws Exception;
+
+    /**
+     * Close the handle / connection to the underlying datastore and release all necessary resources.
+     * @throws Exception
+     */
+    abstract public void close() throws Exception;
 }
