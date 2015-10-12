@@ -1,5 +1,5 @@
 # Matsya
-Matsya is a process that helps you choose the lowest AZ for a machine type when running machines behind Auto Scaling Groups on AWS. 
+[Matsya](https://en.wikipedia.org/wiki/Matsya) is a process that helps you choose the lowest AZ for a machine type when running machines behind Auto Scaling Groups on AWS. 
 
 ## Context
 We've a running Hadoop Cluster whose TTs are backed by Auto Scaling Groups (ASG). In order to provide better availability of TTs to our clusters we run these across AZs. We had 2 problems that needed manual intervention
