@@ -1,3 +1,5 @@
+[![Build Status](https://snap-ci.com/ashwanthkumar/matsya/branch/master/build_image)](https://snap-ci.com/ashwanthkumar/matsya/branch/master)
+
 # Matsya
 [Matsya](https://en.wikipedia.org/wiki/Matsya) is a process that helps you choose the lowest AZ for a machine type when running machines behind Auto Scaling Groups on AWS. 
 
