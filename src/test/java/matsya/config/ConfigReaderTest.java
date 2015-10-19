@@ -15,7 +15,8 @@ public class ConfigReaderTest {
         assertThat(matsyaConfig.getClustes().size(), is(1));
 
         ClusterConfig clusterConfig = matsyaConfig.getClustes().get(0);
-        assertThat(clusterConfig.getName(), is("test-asg"));
+        assertThat(clusterConfig.getSpotASG(), is("test-asg-spot"));
+        assertThat(clusterConfig.getOdASG(), is("test-asg-od"));
         assertThat(clusterConfig.getBidPrice(), is(0.420));
         assertThat(clusterConfig.getMachineType(), is("c3.2xlarge"));
         assertThat(clusterConfig.getThreshold(), is(0.8));

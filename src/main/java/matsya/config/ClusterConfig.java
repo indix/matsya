@@ -7,7 +7,8 @@ import com.typesafe.config.ConfigValue;
 import java.util.Map;
 
 public class ClusterConfig {
-    private String name;
+    private String spotASG;
+    private String odASG;
     private String machineType;
     // FIXME - Add support for non-VPC based setup as well
     /**
@@ -28,7 +29,8 @@ public class ClusterConfig {
         }
 
         return new ClusterConfig()
-                .setName(config.getString("name"))
+                .setSpotASG(config.getString("spot-asg"))
+                .setOnDemandASG(config.getString("od-asg"))
                 .setMachineType(config.getString("machine-type"))
                 .setBidPrice(config.getDouble("bid-price"))
                 .setSubnets(subnets)
@@ -37,12 +39,12 @@ public class ClusterConfig {
                 .setNrOfTimes(config.getInt("nr-of-times"));
     }
 
-    public String getName() {
-        return name;
+    public String getSpotASG() {
+        return spotASG;
     }
 
-    public ClusterConfig setName(String name) {
-        this.name = name;
+    public ClusterConfig setSpotASG(String spotASG) {
+        this.spotASG = spotASG;
         return this;
     }
 
@@ -97,6 +99,15 @@ public class ClusterConfig {
 
     public ClusterConfig setFallbackToOnDemand(boolean fallbackToOnDemand) {
         this.fallbackToOnDemand = fallbackToOnDemand;
+        return this;
+    }
+
+    public String getOdASG() {
+        return odASG;
+    }
+
+    public ClusterConfig setOnDemandASG(String odASG) {
+        this.odASG = odASG;
         return this;
     }
 }
