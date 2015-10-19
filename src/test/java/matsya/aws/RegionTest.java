@@ -3,6 +3,7 @@ package matsya.aws;
 import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.arrayContainingInAnyOrder;
 import static org.junit.Assert.assertThat;
 
 public class RegionTest {
@@ -25,6 +26,14 @@ public class RegionTest {
         assertThat(Region.US_WEST_1.getAvailabilityZone("us-west-1a").id(), is(AZ.US_WEST_1.US_WEST_1A.id()));
         assertThat(Region.US_WEST_2.getAvailabilityZone("us-west-2a").id(), is(AZ.US_WEST_2.US_WEST_2A.id()));
         // Other Regions are not yet implemented
+    }
+
+    @Test
+    public void shouldReturnAllAZsInTheRegion() {
+        assertThat(Region.US_EAST_1.getAZs(), arrayContainingInAnyOrder((AZ.AZType[]) AZ.US_EAST_1.values()));
+        assertThat(Region.US_WEST_1.getAZs(), arrayContainingInAnyOrder((AZ.AZType[]) AZ.US_WEST_1.values()));
+        assertThat(Region.US_WEST_2.getAZs(), arrayContainingInAnyOrder((AZ.AZType[]) AZ.US_WEST_2.values()));
+        // Other regions are not yet implemented
     }
 
 

@@ -43,6 +43,31 @@ public enum Region {
         }
     }
 
+    public AZ.AZType[] getAZs() {
+        switch (this) {
+            case US_EAST_1:
+                return AZ.US_EAST_1.values();
+            case US_WEST_1:
+                return AZ.US_WEST_1.values();
+            case US_WEST_2:
+                return AZ.US_WEST_2.values();
+            case SA_EAST_1:
+                return AZ.NotImplementedAZ.values();
+            case EU_WEST_1:
+                return AZ.NotImplementedAZ.values();
+            case EU_CENTRAL_1:
+                return AZ.NotImplementedAZ.values();
+            case AP_SOUTHEAST_1:
+                return AZ.NotImplementedAZ.values();
+            case AP_SOUTHEAST_2:
+                return AZ.NotImplementedAZ.values();
+            case AP_NORTHEAST_1:
+                return AZ.NotImplementedAZ.values();
+            default:
+                throw new RuntimeException("Invalid Region " + this);
+        }
+    }
+
     public static Region fromString(String region) {
         return Region.valueOf(region.toUpperCase().replace('-', '_'));
     }

@@ -14,6 +14,10 @@ public class AZ {
             throw new RuntimeException("id() not implemented for this AZ");
         }
 
+        public static AZType[] values() {
+            throw new RuntimeException("values() not implemented for this AZ");
+        }
+
         public static AZType fromString(String str) {
             throw new RuntimeException("fromString(String) not implemented for this AZ");
         }
