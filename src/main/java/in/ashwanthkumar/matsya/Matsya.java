@@ -1,4 +1,4 @@
-package in.ashwanthkumar;
+package in.ashwanthkumar.matsya;
 
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
 import com.amazonaws.services.autoscaling.model.AutoScalingGroup;
