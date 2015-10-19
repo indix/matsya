@@ -28,5 +28,6 @@ public class ConfigReaderTest {
                 "us-east-1e", "subnet-5"
         );
         assertThat(clusterConfig.getSubnets(), is(subnets));
+        assertThat(clusterConfig.isFallbackToOnDemand(), is(true));
     }
 }

@@ -18,6 +18,7 @@ public class ClusterConfig {
     private double threshold;
     private int nrOfTimes;
     private double bidPrice;
+    private boolean fallbackToOnDemand;
 
     /* default */ static ClusterConfig from(Config config) {
         Config subnetConfigs = config.getConfig("subnets");
@@ -32,6 +33,7 @@ public class ClusterConfig {
                 .setBidPrice(config.getDouble("bid-price"))
                 .setSubnets(subnets)
                 .setThreshold(config.getDouble("threshold"))
+                .setFallbackToOnDemand(config.getBoolean("fallback-to-od"))
                 .setNrOfTimes(config.getInt("nr-of-times"));
     }
 
@@ -86,6 +88,15 @@ public class ClusterConfig {
 
     public ClusterConfig setBidPrice(double bidPrice) {
         this.bidPrice = bidPrice;
+        return this;
+    }
+
+    public boolean isFallbackToOnDemand() {
+        return fallbackToOnDemand;
+    }
+
+    public ClusterConfig setFallbackToOnDemand(boolean fallbackToOnDemand) {
+        this.fallbackToOnDemand = fallbackToOnDemand;
         return this;
     }
 }
