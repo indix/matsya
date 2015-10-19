@@ -1,7 +1,11 @@
 package matsya.tsdb;
 
 import java.io.IOException;
+import java.util.Map;
 
+/**
+ * Assumed to be Not Thread safe
+ */
 abstract public class TSDB {
     /**
      * Put the value against the key at the specified timestamp
@@ -50,6 +54,11 @@ abstract public class TSDB {
     public byte[] get(Key key) throws IOException, KeyNotFoundException {
         return get(key.getTimestamp(), key.getKey());
     }
+
+    /**
+     * Add data points in bulk
+     */
+    abstract public void batchPut(Iterable<Metric> points) throws Exception;
 
     /**
      * Both Start and End inclusive scan with the given key prefix.

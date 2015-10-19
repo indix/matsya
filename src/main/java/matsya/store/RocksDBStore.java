@@ -2,6 +2,7 @@ package matsya.store;
 
 import matsya.tsdb.Key;
 import matsya.tsdb.KeyNotFoundException;
+import matsya.tsdb.Metric;
 import matsya.tsdb.TSDB;
 import org.rocksdb.*;
 
@@ -48,6 +49,15 @@ public class RocksDBStore extends TSDB {
         } catch (RocksDBException e) {
             throw new KeyNotFoundException(e);
         }
+    }
+
+    @Override
+    public void batchPut(Iterable<Metric> points) throws Exception {
+        WriteBatch batch = new WriteBatch();
+        for (Metric point : points) {
+            batch.put(toKeyBytes(point.getKey().getTimestamp(), point.getKey().getKey()), point.getValue());
+        }
+        db.write(new WriteOptions().setDisableWAL(true), batch);
     }
 
     @Override

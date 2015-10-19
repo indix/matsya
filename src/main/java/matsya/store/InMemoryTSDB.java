@@ -2,6 +2,7 @@ package matsya.store;
 
 import matsya.tsdb.Key;
 import matsya.tsdb.KeyNotFoundException;
+import matsya.tsdb.Metric;
 import matsya.tsdb.TSDB;
 
 import java.io.IOException;
@@ -29,6 +30,13 @@ public class InMemoryTSDB extends TSDB {
             throw new KeyNotFoundException("timestamp=" + timestamp + ", bytes=" + Arrays.toString(key) + " is not found.");
 
         return value.array();
+    }
+
+    @Override
+    public void batchPut(Iterable<Metric> points) throws Exception {
+        for (Metric point : points) {
+            put(point.getKey(), point.getValue());
+        }
     }
 
     @Override
