@@ -29,6 +29,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.7</java.version>
         <aws-java-sdk.version>1.10.26</aws-java-sdk.version>
+        <scala.version>2.10.4</scala.version>
+        <scala.lib.version>2.10</scala.lib.version>
+        <scalatest.version>2.2.3</scalatest.version>
     </properties>
 
     <dependencies>
@@ -61,6 +64,19 @@
             <version>18.0</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.scala-lang</groupId>
+            <artifactId>scala-library</artifactId>
+            <version>${scala.version}</version>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.scalatest</groupId>
+            <artifactId>scalatest_${scala.lib.version}</artifactId>
+            <version>${scalatest.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
