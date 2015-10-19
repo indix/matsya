@@ -20,6 +20,9 @@ public class ConfigReader {
             }
         });
 
-        return new MatsyaConfig().setClusters(clusters);
+        String stateDir = globalConfig.getString("state-dir");
+        return new MatsyaConfig()
+                .setClusters(clusters)
+                .setStateDir(stateDir);
     }
 }

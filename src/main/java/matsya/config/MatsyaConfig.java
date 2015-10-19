@@ -6,6 +6,7 @@ import java.util.List;
 
 public class MatsyaConfig {
     private List<ClusterConfig> clusters = Lists.newArrayList();
+    private String stateDir;
 
     public MatsyaConfig addConfig(ClusterConfig clusterConfig) {
         this.clusters.add(clusterConfig);
@@ -19,5 +20,14 @@ public class MatsyaConfig {
 
     public List<ClusterConfig> getClustes() {
         return clusters;
+    }
+
+    public String getStateDir() {
+        return stateDir;
+    }
+
+    public MatsyaConfig setStateDir(String stateDir) {
+        this.stateDir = stateDir;
+        return this;
     }
 }

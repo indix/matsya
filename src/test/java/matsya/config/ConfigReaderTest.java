@@ -12,6 +12,7 @@ public class ConfigReaderTest {
     @Test
     public void shouldReadConfigProperly() {
         MatsyaConfig matsyaConfig = ConfigReader.load("test-clusters");
+        assertThat(matsyaConfig.getStateDir(), is("state"));
         assertThat(matsyaConfig.getClustes().size(), is(1));
 
         ClusterConfig clusterConfig = matsyaConfig.getClustes().get(0);
