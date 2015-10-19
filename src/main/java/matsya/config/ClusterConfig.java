@@ -7,6 +7,7 @@ import com.typesafe.config.ConfigValue;
 import java.util.Map;
 
 public class ClusterConfig {
+    private String name;
     private String spotASG;
     private String odASG;
     private String machineType;
@@ -29,6 +30,7 @@ public class ClusterConfig {
         }
 
         return new ClusterConfig()
+                .setName(config.getString("name"))
                 .setSpotASG(config.getString("spot-asg"))
                 .setOnDemandASG(config.getString("od-asg"))
                 .setMachineType(config.getString("machine-type"))
@@ -37,6 +39,15 @@ public class ClusterConfig {
                 .setThreshold(config.getDouble("threshold"))
                 .setFallbackToOnDemand(config.getBoolean("fallback-to-od"))
                 .setNrOfTimes(config.getInt("nr-of-times"));
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public ClusterConfig setName(String name) {
+        this.name = name;
+        return this;
     }
 
     public String getSpotASG() {

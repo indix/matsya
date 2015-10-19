@@ -16,6 +16,7 @@ public class ConfigReaderTest {
         assertThat(matsyaConfig.getClustes().size(), is(1));
 
         ClusterConfig clusterConfig = matsyaConfig.getClustes().get(0);
+        assertThat(clusterConfig.getName(), is("Test Hadoop Cluster"));
         assertThat(clusterConfig.getSpotASG(), is("test-asg-spot"));
         assertThat(clusterConfig.getOdASG(), is("test-asg-od"));
         assertThat(clusterConfig.getBidPrice(), is(0.420));
