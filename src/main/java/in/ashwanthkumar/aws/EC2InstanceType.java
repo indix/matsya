@@ -71,6 +71,6 @@ public enum EC2InstanceType {
      * @return
      */
     public static EC2InstanceType fromString(String instanceType) {
-        return EC2InstanceType.valueOf(instanceType.toUpperCase().replace(',', '_'));
+        return EC2InstanceType.valueOf(instanceType.toUpperCase().replace('.', '_'));
     }
 }

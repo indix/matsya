@@ -5,6 +5,7 @@ import org.junit.Test;
 
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 
@@ -32,5 +33,7 @@ public class ConfigReaderTest {
         );
         assertThat(clusterConfig.getSubnets(), is(subnets));
         assertThat(clusterConfig.isFallbackToOnDemand(), is(true));
+
+        assertThat(matsyaConfig.machineTypes(), hasItem("c3.2xlarge"));
     }
 }
