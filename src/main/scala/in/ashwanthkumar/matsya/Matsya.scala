@@ -47,10 +47,10 @@ class Matsya(ec2: AmazonEC2Client,
 
   def updatePriceHistory(): Boolean = {
     val machineTypes = config.machineTypes()
-    val startDate = new DateTime(lastRunOn).toDate
+    val startDate = new DateTime(lastRunOn)
     val request = new DescribeSpotPriceHistoryRequest()
-      .withStartTime(startDate)
-      .withEndTime(DateTime.now.toDate)
+      .withStartTime(startDate.toDate)
+      .withEndTime(now.toDate)
       .withProductDescriptions("Linux/UNIX (Amazon VPC)") // FIXME - Add support for more Product Types
       .withInstanceTypes(machineTypes)
 
@@ -68,21 +68,23 @@ class Matsya(ec2: AmazonEC2Client,
           price = Doubles.stringConverter().convert(p.getSpotPrice),
           timestamp = p.getTimestamp.getTime
         ))
-        logger.info("{} new price points found on {} in {}", metrics.size.toString, name, az)
+        logger.info(s"${metrics.size} new price points found on $name in $az")
 
         val historySoFar: List[Metric] = timeSeriesStore.get(name, az)
 
-        // Always store only latest 100 data points
+        // Always store only latest 100 data points - Do we need more?
         val newHistory = (historySoFar ++ metrics)
           .sortBy(_.timestamp)(implicitly[Ordering[Long]].reverse)
           .take(100)
 
-        logger.info("Syncing Price History for {} in {} from {}", name, az, startDate)
+        logger.info(s"Syncing Price History for $name in $az from $startDate")
         timeSeriesStore.batchPut(name, az, newHistory)
       })
 
     newPrices.nonEmpty // Did we process anything at all?
   }
+
+  private def now: DateTime = DateTime.now
 
   def checkClusters(): Unit = {
     config.getClustes.asScala.foreach(clusterConfig => {
@@ -144,8 +146,8 @@ object MatsyaApp extends App {
   val newPrices = system.updatePriceHistory()
   if (!newPrices) {
     logger.warn("No new spot price changes detected.")
-//    system.shutdown()
-//    System.exit(0)
+    //    system.shutdown()
+    //    System.exit(0)
   }
   system.checkClusters()
   system.shutdown()
