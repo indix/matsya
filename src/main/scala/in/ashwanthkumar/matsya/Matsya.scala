@@ -107,8 +107,13 @@ class Matsya(ec2: AmazonEC2Client,
   }
 
   def thresholdCrossed(clusterConfig: ClusterConfig, state: State): Unit = {
-    val (cheapestAZ, costOnAZ) = findCheapestAZ(clusterConfig, state, timeSeriesStore)
-    moveASGToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
+    findCheapestAZ(clusterConfig, state, timeSeriesStore) match {
+      case Some((cheapestAZ, costOnAZ)) =>
+        moveASGToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
+      case _ =>
+        // TODO - Move to OD in here
+        logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
+    }
   }
 
   // TODO - Make this pluggable
@@ -126,10 +131,15 @@ class Matsya(ec2: AmazonEC2Client,
 
   def findCheapestAZ(clusterConfig: ClusterConfig, state: State, timeseriesStore: TimeSeriesStore) = {
     logger.info("Finding next cheapest AZ for {}", clusterConfig.name)
-    (clusterConfig.allAZs - state.az).map(az => {
+    val candidates = (clusterConfig.allAZs - state.az).map(az => {
       val history = timeseriesStore.get(clusterConfig.machineType, az)
       az -> history.head.price
-    }).minBy(_._2)
+    }).filter(tuple => {
+      val (az, price) = tuple
+      price < clusterConfig.maxBidPrice
+    })
+    if (candidates.nonEmpty) Some(candidates.minBy(_._2))
+    else None
   }
 
   def moveASGToNewAZ(clusterConfig: ClusterConfig, state: State, newLowestAZ: String, costInAz: Double): Unit = {
