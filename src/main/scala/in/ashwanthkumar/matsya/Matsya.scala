@@ -136,7 +136,8 @@ class Matsya(ec2: AmazonEC2Client,
       az -> history.head.price
     }).filter(tuple => {
       val (az, price) = tuple
-      price < clusterConfig.maxBidPrice
+      val cutOffThreshold = clusterConfig.maxThreshold * clusterConfig.maxBidPrice
+      price < cutOffThreshold
     })
     if (candidates.nonEmpty) Some(candidates.minBy(_._2))
     else None
