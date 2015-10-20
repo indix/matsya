@@ -8,5 +8,5 @@ case class Metric(machineType: String,
 trait TimeSeriesStore extends AutoCloseable {
   def get(machineType: String, az: String): List[Metric]
   def exists(machineType: String, az: String): Boolean
-  def batchPut(machineType: String, az: String, metrics: List[Metric])
+  def batchPut(instanceType: String, az: String, metrics: List[Metric])
 }

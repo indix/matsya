@@ -28,8 +28,8 @@ class RocksDBStore(input: String) extends TimeSeriesStore with StateStore {
     if (value != null) JSONUtil.fromJson[List[Metric]](new String(value))
     else List.empty[Metric]
   }
-  override def batchPut(name: String, az: String, metrics: List[Metric]): Unit = {
-    delegate.put(bytes(name + az), JSONUtil.toJSON(metrics).getBytes)
+  override def batchPut(instanceType: String, az: String, metrics: List[Metric]): Unit = {
+    delegate.put(bytes(instanceType + az), JSONUtil.toJSON(metrics).getBytes)
   }
   override def get(name: String): State = {
     JSONUtil.fromJson[State](new String(delegate.get(name.getBytes)))

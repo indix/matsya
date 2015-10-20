@@ -1,10 +1,11 @@
 package in.ashwanthkumar.matsya
 
+import java.lang.{Double => JDouble}
+
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
 import com.amazonaws.services.autoscaling.model.{DescribeAutoScalingGroupsRequest, UpdateAutoScalingGroupRequest}
 import com.amazonaws.services.ec2.AmazonEC2Client
 import com.amazonaws.services.ec2.model.DescribeSpotPriceHistoryRequest
-import com.google.common.primitives.Doubles
 import com.typesafe.scalalogging.slf4j.Logger
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
@@ -44,7 +45,7 @@ class Matsya(ec2: AmazonEC2Client,
       })
   }
 
-  def updatePriceHistory(): Boolean = {
+  def updatePriceHistory(): Unit = {
     val machineTypes = config.machineTypes
     val startDate = new DateTime(lastRunOn)
     val request = new DescribeSpotPriceHistoryRequest()
@@ -57,55 +58,41 @@ class Matsya(ec2: AmazonEC2Client,
       .getSpotPriceHistory.asScala.toList
       .filter(_.getTimestamp.getTime > lastRunOn)
 
-    newPrices
-      .groupBy(s => (s.getInstanceType, s.getAvailabilityZone))
-      .foreach((tuple) => {
-        val ((name, az), prices) = tuple
-        val metrics = prices.map(p => Metric(
-          machineType = name,
-          az = az,
-          price = Doubles.stringConverter().convert(p.getSpotPrice),
-          timestamp = p.getTimestamp.getTime
-        ))
-        logger.info(s"${metrics.size} new price points found on $name in $az")
+    if (newPrices.isEmpty) logger.warn("No new spot price changes detected.")
+    else {
+      newPrices
+        .groupBy(s => (s.getInstanceType, s.getAvailabilityZone))
+        .foreach((tuple) => {
+          val ((instanceType, az), prices) = tuple
+          val metrics = prices.map(p => {
+            val price = JDouble.valueOf(p.getSpotPrice)
+            Metric(instanceType, az, price, p.getTimestamp.getTime)
+          })
+          logger.info(s"${metrics.size} new price points found for $instanceType in $az")
 
-        val historySoFar: List[Metric] = timeSeriesStore.get(name, az)
+          pushMetricsToHistory(startDate, instanceType, az, metrics)
+        })
+    }
+  }
 
-        // Always store only latest 100 data points - Do we need more?
-        val newHistory = (historySoFar ++ metrics)
-          .sortBy(_.timestamp)(implicitly[Ordering[Long]].reverse)
-          .take(100)
+  def pushMetricsToHistory(startDate: DateTime, instanceType: String, az: String, metrics: List[Metric]): Unit = {
+    val historySoFar: List[Metric] = timeSeriesStore.get(instanceType, az)
 
-        logger.info(s"Syncing Price History for $name in $az from $startDate")
-        timeSeriesStore.batchPut(name, az, newHistory)
-      })
+    // Always store only latest 100 data points - Do we need more?
+    val newHistory = (historySoFar ++ metrics)
+      .sortBy(_.timestamp)(implicitly[Ordering[Long]].reverse)
+      .take(100)
 
-    newPrices.nonEmpty // Did we process anything at all?
+    logger.info(s"Syncing Price History for $instanceType in $az from $startDate")
+    timeSeriesStore.batchPut(instanceType, az, newHistory)
   }
 
   def monitorClusters(): Unit = {
     config.clusters.foreach(clusterConfig => {
       val state = stateStore.get(clusterConfig.name)
-      val currentThreshold = state.price / clusterConfig.maxBidPrice
-      logger.info(s"Current price threshold is $currentThreshold ($$${clusterConfig.maxBidPrice}), " +
-        s"acceptable threshold is ${clusterConfig.maxThreshold * 100}% of $$${state.price} in az=${state.az}")
-      if (currentThreshold > clusterConfig.maxThreshold) {
-        // FIXME - Instead of blindly following the nrOfTimes - we should consider OLSRegression based estimation.
-        if ((state.nrOfTimes + 1) >= clusterConfig.maxNrOfTimes) {
-          logger.info("Finding next cheapest AZ for {}", clusterConfig.name)
-          val (newLowestAZ, costInAz) = (clusterConfig.allAZs - state.az).map(az => {
-            val history = timeSeriesStore.get(clusterConfig.machineType, az)
-            az -> history.head.price
-          }).minBy(_._2)
-
-          logger.info(s"Switching the AZ for the Cluster ${clusterConfig.name} from ${state.az} to $newLowestAZ")
-          logger.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.maxBidPrice}")
-          asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
-            .withAutoScalingGroupName(clusterConfig.spotASG)
-            .withVPCZoneIdentifier(clusterConfig.subnets(newLowestAZ))
-          )
-          // TODO - Add support for swapping out to OD as well
-          stateStore.save(clusterConfig.name, state.updateAz(newLowestAZ, costInAz))
+      if (hasViolatedPrice(clusterConfig, state)) {
+        if (hasViolatedOnDuration(clusterConfig, state)) {
+          thresholdCrossed(clusterConfig, state)
         } else {
           logger.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
           logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.maxBidPrice}")
@@ -117,6 +104,43 @@ class Matsya(ec2: AmazonEC2Client,
         logger.info(s"current price=${state.price} is within the max bid price=${clusterConfig.maxBidPrice} on az=${state.az}")
       }
     })
+  }
+
+  def thresholdCrossed(clusterConfig: ClusterConfig, state: State): Unit = {
+    val (cheapestAZ, costOnAZ) = findCheapestAZ(clusterConfig, state, timeSeriesStore)
+    moveASGToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
+  }
+
+  // TODO - Make this pluggable
+  def hasViolatedPrice(clusterConfig: ClusterConfig, state: State): Boolean = {
+    val currentThreshold = state.price / clusterConfig.maxBidPrice
+    logger.info(s"Current price threshold is ${currentThreshold * 100}% of ($$${clusterConfig.maxBidPrice}), " +
+      s"acceptable threshold is ${clusterConfig.maxThreshold * 100}% of $$${state.price} (=$$${clusterConfig.maxThreshold * state.price}) in az=${state.az}")
+    currentThreshold > clusterConfig.maxThreshold
+  }
+
+  // TODO - Make thie pluggable
+  def hasViolatedOnDuration(clusterConfig: ClusterConfig, state: State): Boolean = {
+    (state.nrOfTimes + 1) >= clusterConfig.maxNrOfTimes
+  }
+
+  def findCheapestAZ(clusterConfig: ClusterConfig, state: State, timeseriesStore: TimeSeriesStore) = {
+    logger.info("Finding next cheapest AZ for {}", clusterConfig.name)
+    (clusterConfig.allAZs - state.az).map(az => {
+      val history = timeseriesStore.get(clusterConfig.machineType, az)
+      az -> history.head.price
+    }).minBy(_._2)
+  }
+
+  def moveASGToNewAZ(clusterConfig: ClusterConfig, state: State, newLowestAZ: String, costInAz: Double): Unit = {
+    logger.info(s"Switching the AZ for the Cluster ${clusterConfig.name} from ${state.az} to $newLowestAZ")
+    logger.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.maxBidPrice}")
+    asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
+      .withAutoScalingGroupName(clusterConfig.spotASG)
+      .withVPCZoneIdentifier(clusterConfig.subnets(newLowestAZ))
+    )
+    // TODO - Add support for swapping out to OD as well
+    stateStore.save(clusterConfig.name, state.updateAz(newLowestAZ, costInAz))
   }
 
   def shutdown(): Unit = {
@@ -151,11 +175,6 @@ object MatsyaApp extends App {
 
   system.syncClusterSettings()
   val newPrices = system.updatePriceHistory()
-  if (!newPrices) {
-    logger.warn("No new spot price changes detected.")
-    //    system.shutdown()
-    //    System.exit(0)
-  }
   system.monitorClusters()
   system.shutdown()
 }
