@@ -84,8 +84,6 @@ class Matsya(ec2: AmazonEC2Client,
     newPrices.nonEmpty // Did we process anything at all?
   }
 
-  private def now: DateTime = DateTime.now
-
   def checkClusters(): Unit = {
     config.getClustes.asScala.foreach(clusterConfig => {
       val state = stateStore.get(clusterConfig.getName)
@@ -120,6 +118,9 @@ class Matsya(ec2: AmazonEC2Client,
     timeSeriesStore.close()
     stateStore.close()
   }
+
+  // for mocking in tests
+  private def now: DateTime = DateTime.now
 
   private def describeASG(name: String) = {
     val asg = asgClient.describeAutoScalingGroups(new DescribeAutoScalingGroupsRequest().withAutoScalingGroupNames(name))

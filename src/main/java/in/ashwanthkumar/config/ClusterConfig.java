@@ -13,10 +13,6 @@ public class ClusterConfig {
     private String odASG;
     private String machineType;
     // FIXME - Add support for non-VPC based setup as well
-    /**
-     * Key -> AZ
-     * Value -> Subnet
-     */
     private Map<String, String> subnets;
     private double maxThreshold;
     private int nrOfTimes;
