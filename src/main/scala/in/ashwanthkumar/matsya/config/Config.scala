@@ -18,7 +18,10 @@ case class ClusterConfig(name: String,
                          maxNrOfTimes: Int, // TODO - Should we use duration insted of nr of times? 
                          maxBidPrice: Double,
                          odPrice: Double,
-                         fallBackToOnDemand: Boolean)
+                         fallBackToOnDemand: Boolean) {
+
+  def allAZs = subnets.keySet
+}
 
 object ClusterConfig {
   def from(config: Config): ClusterConfig = {
@@ -44,6 +47,8 @@ case class MatsyaConfig(clusters: List[ClusterConfig], workingDir: String) {
   def stateDir = workingDir + "/" + "state"
   def historyDir = workingDir + "/" + "history"
   def getRegion = "us-east-1"
+
+  def machineTypes = clusters.map(_.machineType).toSet
 }
 
 object MatsyaConfig {

@@ -6,7 +6,7 @@ import com.amazonaws.services.ec2.AmazonEC2Client
 import com.amazonaws.services.ec2.model.DescribeSpotPriceHistoryRequest
 import com.google.common.primitives.Doubles
 import com.typesafe.scalalogging.slf4j.Logger
-import in.ashwanthkumar.config.{ConfigReader, MatsyaConfig}
+import in.ashwanthkumar.matsya.config._
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
@@ -26,12 +26,12 @@ class Matsya(ec2: AmazonEC2Client,
 
   // As of now, we only find new settings that were added to the config
   def syncClusterSettings(): Unit = {
-    config.getClustes.asScala
-      .filterNot(c => stateStore.exists(c.getName))
+    config.clusters
+      .filterNot(c => stateStore.exists(c.name))
       .foreach(c => {
-        logger.info("New cluster {} found", c.getName)
-        val spot = describeASG(c.getSpotASG)
-        val od = describeASG(c.getOdASG)
+        logger.info("New cluster {} found", c.name)
+        val spot = describeASG(c.spotASG)
+        val od = describeASG(c.odASG)
         val (spotCount, odCount, az) = (spot, od) match {
           case (Some(spotASG), None) => (spotASG.getDesiredCapacity.intValue(), 0, spotASG.getAvailabilityZones.asScala.head)
           case (None, Some(odASG)) => (0, odASG.getDesiredCapacity.intValue(), odASG.getAvailabilityZones.asScala.head)
@@ -40,19 +40,19 @@ class Matsya(ec2: AmazonEC2Client,
           case (Some(spotASG), Some(odASG)) if spotASG.getDesiredCapacity > 0 && odASG.getDesiredCapacity > 0 =>
             throw new RuntimeException("both Spot and OD ASGs have > 0 as desired capacity")
         }
-        val state = State(c.getName, az, c.getBidPrice, 0, spotCount, odCount, System.currentTimeMillis())
-        stateStore.save(c.getName, state)
+        val state = State(c.name, az, c.maxBidPrice, 0, spotCount, odCount, System.currentTimeMillis())
+        stateStore.save(c.name, state)
       })
   }
 
   def updatePriceHistory(): Boolean = {
-    val machineTypes = config.machineTypes()
+    val machineTypes = config.machineTypes
     val startDate = new DateTime(lastRunOn)
     val request = new DescribeSpotPriceHistoryRequest()
       .withStartTime(startDate.toDate)
       .withEndTime(now.toDate)
       .withProductDescriptions("Linux/UNIX (Amazon VPC)") // FIXME - Add support for more Product Types
-      .withInstanceTypes(machineTypes)
+      .withInstanceTypes(machineTypes.asJava)
 
     val newPrices = ec2.describeSpotPriceHistory(request)
       .getSpotPriceHistory.asScala.toList
@@ -85,30 +85,30 @@ class Matsya(ec2: AmazonEC2Client,
   }
 
   def checkClusters(): Unit = {
-    config.getClustes.asScala.foreach(clusterConfig => {
-      val state = stateStore.get(clusterConfig.getName)
-      val currentThreshold = state.price / clusterConfig.getBidPrice
-      logger.info(s"Current price threshold is $currentThreshold, acceptable threshold is ${clusterConfig.getMaxThreshold}")
-      if (currentThreshold > clusterConfig.getMaxThreshold) {
-        if ((state.nrOfTimes + 1) >= clusterConfig.getNrOfTimes) {
-          logger.info("Finding next cheapest AZ for {}", clusterConfig.getName)
-          val (newLowestAZ, costInAz) = (clusterConfig.allAZs().asScala.toSet - state.az).map(az => {
-            val history = timeSeriesStore.get(clusterConfig.getMachineType, az)
+    config.clusters.foreach(clusterConfig => {
+      val state = stateStore.get(clusterConfig.name)
+      val currentThreshold = state.price / clusterConfig.maxBidPrice
+      logger.info(s"Current price threshold is $currentThreshold, acceptable threshold is ${clusterConfig.maxThreshold}")
+      if (currentThreshold > clusterConfig.maxThreshold) {
+        if ((state.nrOfTimes + 1) >= clusterConfig.maxNrOfTimes) {
+          logger.info("Finding next cheapest AZ for {}", clusterConfig.name)
+          val (newLowestAZ, costInAz) = (clusterConfig.allAZs - state.az).map(az => {
+            val history = timeSeriesStore.get(clusterConfig.machineType, az)
             az -> history.head.price
           }).minBy(_._2)
           // TODO - Make the switch on the ASG here
           // TODO - Add support for swapping out to OD as well
-          logger.info(s"Switching the AZ for the Cluster ${clusterConfig.getName} from ${state.az} to $newLowestAZ")
-          logger.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.getBidPrice}")
-          stateStore.save(clusterConfig.getName, state.updateAz(newLowestAZ, costInAz))
+          logger.info(s"Switching the AZ for the Cluster ${clusterConfig.name} from ${state.az} to $newLowestAZ")
+          logger.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.maxBidPrice}")
+          stateStore.save(clusterConfig.name, state.updateAz(newLowestAZ, costInAz))
         } else {
-          logger.info(s"${clusterConfig.getName} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.getNrOfTimes} ")
-          logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.getBidPrice}")
-          stateStore.save(clusterConfig.getName, state.crossedThreshold())
+          logger.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
+          logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.maxBidPrice}")
+          stateStore.save(clusterConfig.name, state.crossedThreshold())
         }
       } else {
         // The bid price in the current AZ is well within the threshold
-        logger.info(s"current price=${state.price} is within the max bid price=${clusterConfig.getBidPrice} on az=${state.az}")
+        logger.info(s"current price=${state.price} is within the max bid price=${clusterConfig.maxBidPrice} on az=${state.az}")
       }
     })
   }
@@ -139,8 +139,8 @@ object MatsyaApp extends App {
     new AmazonEC2Client(),
     new AmazonAutoScalingClient(),
     config,
-    new RocksDBStore(config.timeseriesDir()),
-    new RocksDBStore(config.stateDir())
+    new RocksDBStore(config.historyDir),
+    new RocksDBStore(config.stateDir)
   )
 
   system.syncClusterSettings()
