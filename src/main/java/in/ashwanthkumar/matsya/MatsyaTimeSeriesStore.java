@@ -24,7 +24,9 @@ public class MatsyaTimeSeriesStore implements AutoCloseable {
         List<Metric> metrics = Lists.transform(points, new Function<Point, Metric>() {
             @Override
             public Metric apply(Point input) {
-                ByteBuffer value = ByteBuffer.allocate(Doubles.BYTES).putDouble(input.getPrice());
+                ByteBuffer value = ByteBuffer.allocate(Doubles.BYTES)
+                        .putDouble(input.getPrice())
+                        .putLong(input.getTimestamp());
                 return new Metric()
                         .setKey(Key.of(toKey(machineType, region, input.getAvailabilityZone()), input.getTimestamp()))
                         .setValue(value.array());
@@ -33,6 +35,21 @@ public class MatsyaTimeSeriesStore implements AutoCloseable {
         delegate.batchPut(metrics);
         delegate.flush();
         return this;
+    }
+
+    public List<Point> historyFor(String machineType, String region, String az, long start, long end) throws Exception {
+        byte[][] values = delegate.scan(start, end, toKey(machineType, region, az));
+        List<Point> points = Lists.newArrayList();
+        for (int i = 0; i < values.length; i++) {
+            ByteBuffer value = ByteBuffer.wrap(values[i]);
+            Point point = new Point()
+                    .setAvailabilityZone(az)
+                    .setPrice(value.getDouble())
+                    .setTimestamp(value.getLong());
+            points.add(point);
+        }
+
+        return points;
     }
 
     public void close() throws Exception {

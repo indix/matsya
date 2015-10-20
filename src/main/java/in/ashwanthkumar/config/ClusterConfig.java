@@ -5,6 +5,7 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigValue;
 
 import java.util.Map;
+import java.util.Set;
 
 public class ClusterConfig {
     private String name;
@@ -17,7 +18,7 @@ public class ClusterConfig {
      * Value -> Subnet
      */
     private Map<String, String> subnets;
-    private double threshold;
+    private double maxThreshold;
     private int nrOfTimes;
     private double bidPrice;
     private boolean fallbackToOnDemand;
@@ -36,9 +37,13 @@ public class ClusterConfig {
                 .setMachineType(config.getString("machine-type"))
                 .setBidPrice(config.getDouble("bid-price"))
                 .setSubnets(subnets)
-                .setThreshold(config.getDouble("threshold"))
+                .setMaxThreshold(config.getDouble("max-threshold"))
                 .setFallbackToOnDemand(config.getBoolean("fallback-to-od"))
                 .setNrOfTimes(config.getInt("nr-of-times"));
+    }
+
+    public Set<String> allAZs() {
+        return subnets.keySet();
     }
 
     public String getName() {
@@ -77,12 +82,12 @@ public class ClusterConfig {
         return this;
     }
 
-    public double getThreshold() {
-        return threshold;
+    public double getMaxThreshold() {
+        return maxThreshold;
     }
 
-    public ClusterConfig setThreshold(double threshold) {
-        this.threshold = threshold;
+    public ClusterConfig setMaxThreshold(double maxThreshold) {
+        this.maxThreshold = maxThreshold;
         return this;
     }
 

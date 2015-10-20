@@ -22,7 +22,7 @@ public class ConfigReaderTest {
         assertThat(clusterConfig.getOdASG(), is("test-asg-od"));
         assertThat(clusterConfig.getBidPrice(), is(0.420));
         assertThat(clusterConfig.getMachineType(), is("c3.2xlarge"));
-        assertThat(clusterConfig.getThreshold(), is(0.8));
+        assertThat(clusterConfig.getMaxThreshold(), is(0.8));
         assertThat(clusterConfig.getNrOfTimes(), is(5));
         Map<String, String> subnets = ImmutableMap.of(
                 "us-east-1a", "subnet-1",
