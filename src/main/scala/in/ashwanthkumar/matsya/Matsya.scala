@@ -1,123 +1,16 @@
-package in.ashwanthkumar.matsya2
-
-import java.io.File
-import java.lang.reflect.{ParameterizedType, Type}
-import java.util.{List => JList}
+package in.ashwanthkumar.matsya
 
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
 import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsRequest
 import com.amazonaws.services.ec2.AmazonEC2Client
 import com.amazonaws.services.ec2.model.DescribeSpotPriceHistoryRequest
-import com.fasterxml.jackson.core.`type`.TypeReference
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import com.google.common.primitives.{Doubles, Longs}
+import com.google.common.primitives.Doubles
 import com.typesafe.scalalogging.slf4j.Logger
 import in.ashwanthkumar.config.{ConfigReader, MatsyaConfig}
 import org.joda.time.DateTime
-import org.rocksdb.{Options, RocksDB}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
-
-case class Metric(machineType: String,
-                  az: String,
-                  price: Double,
-                  timestamp: Long)
-
-trait TimeSeriesStore extends AutoCloseable {
-  def get(machineType: String, az: String): List[Metric]
-  def exists(machineType: String, az: String): Boolean
-  def batchPut(machineType: String, az: String, metrics: List[Metric])
-}
-
-case class State(name: String,
-                 az: String,
-                 price: Double,
-                 nrOfTimes: Int,
-                 spotCount: Int,
-                 odCount: Int,
-                 timestamp: Long) {
-
-  def crossedThreshold() = this.copy(nrOfTimes = nrOfTimes + 1)
-  def updateAz(az: String, newPrice: Double) = this.copy(az = az, nrOfTimes = 0, price = newPrice, timestamp = System.currentTimeMillis())
-}
-
-trait StateStore extends AutoCloseable {
-  def exists(clusterName: String): Boolean
-  def get(clusterName: String): State
-  def save(clusterName: String, state: State): Unit
-
-  def updateLastRun(identifier: String): Unit
-  def lastRun(identifier: String): Long
-}
-
-class RocksDBStore(input: String) extends TimeSeriesStore with StateStore {
-
-  RocksDB.loadLibrary()
-
-  private lazy val delegate = {
-    val dbOptions = new Options()
-      .setCreateIfMissing(true)
-      .setMaxBackgroundCompactions(2)
-    new File(input).mkdirs
-    RocksDB.open(dbOptions, input)
-  }
-
-  override def exists(name: String, az: String): Boolean = {
-    delegate.get(bytes(name + az)) != null
-  }
-  override def exists(name: String): Boolean = {
-    delegate.get(bytes(name)) != null
-  }
-  override def get(name: String, az: String): List[Metric] = {
-    val value = delegate.get(bytes(name + az))
-    if (value != null) JSONUtil.fromJson[List[Metric]](new String(value))
-    else List.empty[Metric]
-  }
-  override def batchPut(name: String, az: String, metrics: List[Metric]): Unit = {
-    delegate.put(bytes(name + az), JSONUtil.toJSON(metrics).getBytes)
-  }
-  override def get(name: String): State = {
-    JSONUtil.fromJson[State](new String(delegate.get(name.getBytes)))
-  }
-  override def save(name: String, state: State): Unit = {
-    delegate.put(bytes(name), JSONUtil.toJSON(state).getBytes)
-  }
-  override def close(): Unit = delegate.close()
-
-  override def updateLastRun(identifier: String): Unit = {
-    delegate.put(bytes(identifier), Longs.toByteArray(System.currentTimeMillis()))
-  }
-  override def lastRun(identifier: String): Long = {
-    val value = delegate.get(bytes(identifier))
-    if (value != null) Longs.fromByteArray(value)
-    else 0
-  }
-
-  private def bytes(str: String) = str.getBytes
-}
-
-object JSONUtil {
-  private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
-  def toJSON(o: AnyRef) = mapper.writeValueAsString(o)
-  def fromJson[T: Manifest](json: String) = mapper.readValue[T](json, typeReference[T])
-
-  private[this] def typeReference[T: Manifest] = new TypeReference[T] {
-    override def getType = typeFromManifest(manifest[T])
-  }
-
-  private[this] def typeFromManifest(m: Manifest[_]): Type = {
-    if (m.typeArguments.isEmpty) {
-      m.erasure
-    }
-    else new ParameterizedType {
-      def getRawType = m.erasure
-      def getActualTypeArguments = m.typeArguments.map(typeFromManifest).toArray
-      def getOwnerType = null
-    }
-  }
-}
 
 class Matsya(ec2: AmazonEC2Client,
              asgClient: AmazonAutoScalingClient,
