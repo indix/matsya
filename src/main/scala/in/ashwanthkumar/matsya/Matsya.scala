@@ -83,12 +83,13 @@ class Matsya(ec2: AmazonEC2Client,
     newPrices.nonEmpty // Did we process anything at all?
   }
 
-  def checkClusters(): Unit = {
+  def monitorClusters(): Unit = {
     config.clusters.foreach(clusterConfig => {
       val state = stateStore.get(clusterConfig.name)
       val currentThreshold = state.price / clusterConfig.maxBidPrice
       logger.info(s"Current price threshold is $currentThreshold, acceptable threshold is ${clusterConfig.maxThreshold}")
       if (currentThreshold > clusterConfig.maxThreshold) {
+        // FIXME - Instead of blindly following the nrOfTimes - we should consider OLSRegression based estimation.
         if ((state.nrOfTimes + 1) >= clusterConfig.maxNrOfTimes) {
           logger.info("Finding next cheapest AZ for {}", clusterConfig.name)
           val (newLowestAZ, costInAz) = (clusterConfig.allAZs - state.az).map(az => {
@@ -106,6 +107,7 @@ class Matsya(ec2: AmazonEC2Client,
           stateStore.save(clusterConfig.name, state.crossedThreshold())
         }
       } else {
+        stateStore.save(clusterConfig.name, state.resetCount())
         // The bid price in the current AZ is well within the threshold
         logger.info(s"current price=${state.price} is within the max bid price=${clusterConfig.maxBidPrice} on az=${state.az}")
       }
@@ -149,6 +151,6 @@ object MatsyaApp extends App {
     //    system.shutdown()
     //    System.exit(0)
   }
-  system.checkClusters()
+  system.monitorClusters()
   system.shutdown()
 }

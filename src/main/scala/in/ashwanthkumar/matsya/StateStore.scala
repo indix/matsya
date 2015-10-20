@@ -10,6 +10,7 @@ case class State(name: String,
                  timestamp: Long) {
 
   def crossedThreshold() = this.copy(nrOfTimes = nrOfTimes + 1)
+  def resetCount() = this.copy(nrOfTimes = 0)
   def updateAz(az: String, newPrice: Double) = this.copy(az = az, nrOfTimes = 0, price = newPrice, timestamp = System.currentTimeMillis())
 }
 
