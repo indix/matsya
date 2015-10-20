@@ -1,7 +1,7 @@
-package in.ashwanthkumar.matsya.config
+package in.ashwanthkumar.matsya
 
 import org.scalatest.FlatSpec
-import org.scalatest.Matchers.{convertToAnyShouldWrapper, be, have, size}
+import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, have}
 
 class ConfigReaderTest extends FlatSpec {
   "ConfigReader" should "read the test configuration" in {

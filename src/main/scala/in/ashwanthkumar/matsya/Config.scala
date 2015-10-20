@@ -1,4 +1,4 @@
-package in.ashwanthkumar.matsya.config
+package in.ashwanthkumar.matsya
 
 import java.io.File
 
