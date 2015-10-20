@@ -6,7 +6,6 @@ import com.amazonaws.services.ec2.AmazonEC2Client
 import com.amazonaws.services.ec2.model.DescribeSpotPriceHistoryRequest
 import com.google.common.primitives.Doubles
 import com.typesafe.scalalogging.slf4j.Logger
-import in.ashwanthkumar.matsya.config._
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
