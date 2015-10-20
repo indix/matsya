@@ -1,7 +1,7 @@
 package in.ashwanthkumar.matsya
 
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
-import com.amazonaws.services.autoscaling.model.{DescribeAutoScalingInstancesRequest, UpdateAutoScalingGroupRequest, DescribeAutoScalingGroupsRequest}
+import com.amazonaws.services.autoscaling.model.{DescribeAutoScalingGroupsRequest, UpdateAutoScalingGroupRequest}
 import com.amazonaws.services.ec2.AmazonEC2Client
 import com.amazonaws.services.ec2.model.DescribeSpotPriceHistoryRequest
 import com.google.common.primitives.Doubles
@@ -87,7 +87,8 @@ class Matsya(ec2: AmazonEC2Client,
     config.clusters.foreach(clusterConfig => {
       val state = stateStore.get(clusterConfig.name)
       val currentThreshold = state.price / clusterConfig.maxBidPrice
-      logger.info(s"Current price threshold is $currentThreshold ($$${clusterConfig.maxBidPrice}), acceptable threshold is ${clusterConfig.maxThreshold}($$${state.price}) in az=${state.az}")
+      logger.info(s"Current price threshold is $currentThreshold ($$${clusterConfig.maxBidPrice}), " +
+        s"acceptable threshold is ${clusterConfig.maxThreshold * 100}% of $$${state.price} in az=${state.az}")
       if (currentThreshold > clusterConfig.maxThreshold) {
         // FIXME - Instead of blindly following the nrOfTimes - we should consider OLSRegression based estimation.
         if ((state.nrOfTimes + 1) >= clusterConfig.maxNrOfTimes) {
@@ -103,9 +104,8 @@ class Matsya(ec2: AmazonEC2Client,
             .withAutoScalingGroupName(clusterConfig.spotASG)
             .withVPCZoneIdentifier(clusterConfig.subnets(newLowestAZ))
           )
-          asgClient.describeAutoScalingInstances()
           // TODO - Add support for swapping out to OD as well
-           stateStore.save(clusterConfig.name, state.updateAz(newLowestAZ, costInAz))
+          stateStore.save(clusterConfig.name, state.updateAz(newLowestAZ, costInAz))
         } else {
           logger.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
           logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.maxBidPrice}")
