@@ -38,15 +38,18 @@ matsya {
     # maximum % of the bid price after which we should swap the AZ
     max-threshold = 0.99
 
-    # This many _consecutive_ number of crossing the max-threshold would result in the change
+    # This many _consecutive_ number of crossing the max-threshold
+    # would result in the change
     nr-of-times = 3
 
-    # Should we fallback to On Demand instance if we can't find any AZ within the bid-price range?
+    # Should we fallback to On Demand instance if we can't find any AZ
+    # within the bid-price range?
     fallback-to-od = false
 
     # Subnets that're configured for each AZ
     # We don't support swapping classic ASGs
-    # The format is availability-zone = subnet-identifier (you can only have 1 subnet on an AZ)
+    # The format is availability-zone = subnet-identifier
+    # (you can only have 1 subnet on an AZ)
     subnets = {
       "us-east-1a" = "subnet-d68cfbfe"
       "us-east-1b" = "subnet-2d230246"
