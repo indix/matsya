@@ -71,6 +71,11 @@ Multiple AZs come with a cost - Data Transfer and variable Spot prices. Autoscal
 #### Why not use Spot Blocks? <br />
 Spot blocks are a great step forward but our use cases where we wanted to build something which runs 24x7.
 
+#### Why not use Spot Fleets?
+Matsya has 2 features that're missing in Spot Fleets (today)
+- Automatic Fallback to OD
+- Automatic fallback to a single AZ (for the entire set of nodes)
+
 ## Status
 This project is being actively developed and should be considered alpha quality.
 
