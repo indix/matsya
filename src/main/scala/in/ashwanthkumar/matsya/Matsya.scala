@@ -7,6 +7,7 @@ import com.amazonaws.services.autoscaling.model.{DescribeAutoScalingGroupsReques
 import com.amazonaws.services.ec2.AmazonEC2Client
 import com.amazonaws.services.ec2.model.DescribeSpotPriceHistoryRequest
 import com.typesafe.scalalogging.slf4j.Logger
+import in.ashwanthkumar.slack.webhook.Slack
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
@@ -16,34 +17,14 @@ class Matsya(ec2: AmazonEC2Client,
              asgClient: AmazonAutoScalingClient,
              config: MatsyaConfig,
              timeSeriesStore: TimeSeriesStore,
-             stateStore: StateStore) {
+             stateStore: StateStore,
+             notifier: Notifier) {
 
   private val LAST_RUN_IDENTIFIER = "MatsyaLastRun"
 
   private val logger = Logger(LoggerFactory.getLogger(classOf[Matsya]))
   private val lastRunOn = stateStore.lastRun(LAST_RUN_IDENTIFIER)
   logger.info("Last sync happened on {}", new DateTime(lastRunOn))
-
-  // As of now, we only find new settings that were added to the config
-  def syncClusterSettings(): Unit = {
-    config.clusters
-      .filterNot(c => stateStore.exists(c.name))
-      .foreach(c => {
-        logger.info("New cluster {} found", c.name)
-        val spot = describeASG(c.spotASG)
-        val od = describeASG(c.odASG)
-        val (az, mode) = (spot, od) match {
-          case (None, Some(odASG)) if odASG.getDesiredCapacity > 0 => (odASG.getAvailabilityZones.asScala.head, ClusterMode.OnDemand)
-          case (Some(spotASG), None) => (spotASG.getAvailabilityZones.asScala.head, ClusterMode.Spot)
-          case (None, None) =>
-            throw new RuntimeException("both Spot and OD ASGs are not to be found. We don't create ASGs if not present yet")
-          case (Some(spotASG), Some(odASG)) if spotASG.getDesiredCapacity > 0 && odASG.getDesiredCapacity > 0 =>
-            throw new RuntimeException("both Spot and OD ASGs have > 0 as desired capacity")
-        }
-        val state = State(c.name, az, c.maxBidPrice, nrOfTimes = 0, mode, lastModeChangedTimestamp = 0, System.currentTimeMillis())
-        stateStore.save(c.name, state)
-      })
-  }
 
   def updatePriceHistory(): Unit = {
     val machineTypes = config.machineTypes
@@ -67,12 +48,36 @@ class Matsya(ec2: AmazonEC2Client,
           val metrics = prices.map(p => {
             val price = JDouble.valueOf(p.getSpotPrice)
             Metric(instanceType, az, price, p.getTimestamp.getTime)
-          })
+          }).sortBy(_.timestamp)(implicitly[Ordering[Long]].reverse)
           logger.info(s"${metrics.size} new price points found for $instanceType in $az")
 
           pushMetricsToHistory(startDate, instanceType, az, metrics)
         })
     }
+  }
+
+  // As of now, we only find new settings that were added to the config
+  def syncClusterSettings(): Unit = {
+    config.clusters
+      .filterNot(c => stateStore.exists(c.name))
+      .foreach(c => {
+        logger.info(s"New cluster ${c.name} found")
+        val spot = describeASG(c.spotASG)
+        val od = describeASG(c.odASG)
+        val (az, mode) = (spot, od) match {
+          case (None, Some(odASG)) if odASG.getDesiredCapacity > 0 => (odASG.getAvailabilityZones.asScala.head, ClusterMode.OnDemand)
+          case (Some(spotASG), None) => (spotASG.getAvailabilityZones.asScala.head, ClusterMode.Spot)
+          case (None, None) =>
+            notifier.error("both Spot and OD ASGs are not to be found. We don't create ASGs if not present yet")
+            throw new RuntimeException("both Spot and OD ASGs are not to be found. We don't create ASGs if not present yet")
+          case (Some(spotASG), Some(odASG)) if spotASG.getDesiredCapacity > 0 && odASG.getDesiredCapacity > 0 =>
+            notifier.error("both Spot and OD ASGs have > 0 as desired capacity")
+            throw new RuntimeException("both Spot and OD ASGs have > 0 as desired capacity")
+        }
+        val lastKnownPrice = timeSeriesStore.get(c.machineType, az).maxBy(_.timestamp)
+        val state = State(c.name, az, lastKnownPrice.price, nrOfTimes = 0, mode, lastModeChangedTimestamp = 0, System.currentTimeMillis())
+        stateStore.save(c.name, state)
+      })
   }
 
   def pushMetricsToHistory(startDate: DateTime, instanceType: String, az: String, metrics: List[Metric]): Unit = {
@@ -95,29 +100,32 @@ class Matsya(ec2: AmazonEC2Client,
           thresholdCrossed(clusterConfig, state)
         } else {
           logger.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
+          notifier.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes}")
           logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.maxBidPrice}")
           stateStore.save(clusterConfig.name, state.crossedThreshold())
         }
       } else {
         stateStore.save(clusterConfig.name, state.resetCount())
         // The bid price in the current AZ is well within the threshold
-        logger.info(s"current price=${state.price} is within the max bid price=${clusterConfig.maxBidPrice} on az=${state.az}")
+        logger.info(s"CurrentSpotPrice = ${state.price} is within the MaxBidPrice = ${clusterConfig.maxBidPrice} on AZ = ${state.az}")
       }
     })
   }
 
   def thresholdCrossed(clusterConfig: ClusterConfig, state: State): Unit = {
-    if(state.clusterMode == ClusterMode.Spot) {
+    if (state.clusterMode == ClusterMode.Spot) {
       findCheapestAZForSpot(clusterConfig, state, timeSeriesStore) match {
         case Some((cheapestAZ, costOnAZ)) =>
           moveToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
         case _ =>
           logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
           logger.info(s"Switching to OD Mode - Not Implemented yet")
-//          moveToOnDemand(clusterConfig, state)
+          notifier.info(s"Switching to OD Mode - Not Implemented yet")
+        // moveToOnDemand(clusterConfig, state)
       }
     } else {
       logger.warn(s"On Demand clusters are crossing the threshold limit on prices. Please check your config for ${clusterConfig.name} cluster")
+      notifier.error(s"On Demand clusters are crossing the threshold limit on prices. Please check your config for ${clusterConfig.name} cluster")
     }
   }
 
@@ -141,8 +149,7 @@ class Matsya(ec2: AmazonEC2Client,
   // TODO - Make this pluggable
   def hasViolatedPrice(clusterConfig: ClusterConfig, state: State): Boolean = {
     val currentThreshold = state.price / clusterConfig.maxBidPrice
-    logger.info(s"Current price threshold is ${currentThreshold * 100}% of ($$${clusterConfig.maxBidPrice}), " +
-      s"acceptable threshold is ${clusterConfig.maxThreshold * 100}% of $$${state.price} (=$$${clusterConfig.maxThreshold * state.price}) in az=${state.az}")
+    logger.info(s"CurrentThreshold = ${math.round(currentThreshold * 100)}%, AcceptableThreshold = ${math.round(clusterConfig.maxThreshold * 100)}%, BidPrice = $$${clusterConfig.maxBidPrice} in AZ = ${state.az}")
     currentThreshold > clusterConfig.maxThreshold
   }
 
@@ -167,7 +174,9 @@ class Matsya(ec2: AmazonEC2Client,
 
   def moveToNewAZ(clusterConfig: ClusterConfig, state: State, newLowestAZ: String, costInAz: Double): Unit = {
     logger.info(s"Switching the AZ for the Cluster ${clusterConfig.name} from ${state.az} to $newLowestAZ")
+    notifier.info(s"Switching the AZ for the Cluster ${clusterConfig.name} from ${state.az} to $newLowestAZ")
     logger.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.maxBidPrice}")
+    notifier.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.maxBidPrice}")
     asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
       .withAutoScalingGroupName(clusterConfig.spotASG)
       .withVPCZoneIdentifier(clusterConfig.subnets(newLowestAZ))
@@ -203,11 +212,12 @@ object MatsyaApp extends App {
     new AmazonAutoScalingClient(),
     config,
     new RocksDBStore(config.historyDir),
-    new RocksDBStore(config.stateDir)
+    new RocksDBStore(config.stateDir),
+    new SlackNotifier(config.slackWebHook.map(new Slack(_)))
   )
 
+  system.updatePriceHistory()
   system.syncClusterSettings()
-  val newPrices = system.updatePriceHistory()
   system.monitorClusters()
   system.shutdown()
 }
