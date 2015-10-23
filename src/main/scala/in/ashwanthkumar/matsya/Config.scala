@@ -43,7 +43,7 @@ object ClusterConfig {
   }
 }
 
-case class MatsyaConfig(clusters: List[ClusterConfig], workingDir: String) {
+case class MatsyaConfig(clusters: List[ClusterConfig], workingDir: String, slackWebHook: Option[String]) {
   def stateDir = workingDir + "/" + "state"
   def historyDir = workingDir + "/" + "history"
   def getRegion = "us-east-1"
@@ -57,8 +57,14 @@ object MatsyaConfig {
     val clusters = config.getConfigList("clusters").map(ClusterConfig.from).toList
     MatsyaConfig(
       clusters = clusters,
-      workingDir = config.getString("working-dir")
+      workingDir = config.getString("working-dir"),
+      slackWebHook = optionString(config, "slack-webhook")
     )
+  }
+
+  private def optionString(config: Config, key: String) = {
+    if (config.hasPath(key)) Some(config.getString(key))
+    else None
   }
 }
 

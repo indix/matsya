@@ -7,6 +7,7 @@ class ConfigReaderTest extends FlatSpec {
   "ConfigReader" should "read the test configuration" in {
     val config = ConfigReader.load("test-clusters")
 
+    config.slackWebHook should be(Some("https://hooks.slack.com/services/foo/bar/baz"))
     config.workingDir should be("working-dir")
     config.stateDir should be("working-dir/state")
     config.historyDir should be("working-dir/history")
