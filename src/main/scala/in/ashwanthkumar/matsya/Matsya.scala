@@ -32,15 +32,15 @@ class Matsya(ec2: AmazonEC2Client,
         logger.info("New cluster {} found", c.name)
         val spot = describeASG(c.spotASG)
         val od = describeASG(c.odASG)
-        val (spotCount, odCount, az) = (spot, od) match {
-          case (Some(spotASG), None) => (spotASG.getDesiredCapacity.intValue(), 0, spotASG.getAvailabilityZones.asScala.head)
-          case (None, Some(odASG)) => (0, odASG.getDesiredCapacity.intValue(), odASG.getAvailabilityZones.asScala.head)
+        val (az, mode) = (spot, od) match {
+          case (None, Some(odASG)) if odASG.getDesiredCapacity > 0 => (odASG.getAvailabilityZones.asScala.head, ClusterMode.OnDemand)
+          case (Some(spotASG), None) => (spotASG.getAvailabilityZones.asScala.head, ClusterMode.Spot)
           case (None, None) =>
             throw new RuntimeException("both Spot and OD ASGs are not to be found. We don't create ASGs if not present yet")
           case (Some(spotASG), Some(odASG)) if spotASG.getDesiredCapacity > 0 && odASG.getDesiredCapacity > 0 =>
             throw new RuntimeException("both Spot and OD ASGs have > 0 as desired capacity")
         }
-        val state = State(c.name, az, c.maxBidPrice, 0, spotCount, odCount, System.currentTimeMillis())
+        val state = State(c.name, az, c.maxBidPrice, nrOfTimes = 0, mode, lastModeChangedTimestamp = 0, System.currentTimeMillis())
         stateStore.save(c.name, state)
       })
   }
@@ -107,13 +107,35 @@ class Matsya(ec2: AmazonEC2Client,
   }
 
   def thresholdCrossed(clusterConfig: ClusterConfig, state: State): Unit = {
-    findCheapestAZ(clusterConfig, state, timeSeriesStore) match {
-      case Some((cheapestAZ, costOnAZ)) =>
-        moveASGToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
-      case _ =>
-        // TODO - Move to OD in here
-        logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
+    if(state.clusterMode == ClusterMode.Spot) {
+      findCheapestAZForSpot(clusterConfig, state, timeSeriesStore) match {
+        case Some((cheapestAZ, costOnAZ)) =>
+          moveToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
+        case _ =>
+          logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
+          logger.info(s"Switching to OD Mode - Not Implemented yet")
+//          moveToOnDemand(clusterConfig, state)
+      }
+    } else {
+      logger.warn(s"On Demand clusters are crossing the threshold limit on prices. Please check your config for ${clusterConfig.name} cluster")
     }
+  }
+
+  def moveToOnDemand(clusterConfig: ClusterConfig, state: State): Unit = {
+    val fleetSize: Int = describeASG(clusterConfig.spotASG) match {
+      case Some(asg) => asg.getDesiredCapacity
+      case _ => 0
+    }
+    asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
+      .withAutoScalingGroupName(clusterConfig.odASG)
+      .withDesiredCapacity(fleetSize)
+      .withVPCZoneIdentifier(clusterConfig.subnets(state.az))
+    )
+    logger.info(s"Moved ${clusterConfig.name} to On Demand (${clusterConfig.odASG}) with size = $fleetSize in ${clusterConfig.subnets(state.az)}")
+    asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
+      .withAutoScalingGroupName(clusterConfig.spotASG)
+      .withDesiredCapacity(0)
+    )
   }
 
   // TODO - Make this pluggable
@@ -124,12 +146,12 @@ class Matsya(ec2: AmazonEC2Client,
     currentThreshold > clusterConfig.maxThreshold
   }
 
-  // TODO - Make thie pluggable
+  // TODO - Make this pluggable
   def hasViolatedOnDuration(clusterConfig: ClusterConfig, state: State): Boolean = {
     (state.nrOfTimes + 1) >= clusterConfig.maxNrOfTimes
   }
 
-  def findCheapestAZ(clusterConfig: ClusterConfig, state: State, timeseriesStore: TimeSeriesStore) = {
+  def findCheapestAZForSpot(clusterConfig: ClusterConfig, state: State, timeseriesStore: TimeSeriesStore) = {
     logger.info("Finding next cheapest AZ for {}", clusterConfig.name)
     val candidates = (clusterConfig.allAZs - state.az).map(az => {
       val history = timeseriesStore.get(clusterConfig.machineType, az)
@@ -143,15 +165,15 @@ class Matsya(ec2: AmazonEC2Client,
     else None
   }
 
-  def moveASGToNewAZ(clusterConfig: ClusterConfig, state: State, newLowestAZ: String, costInAz: Double): Unit = {
+  def moveToNewAZ(clusterConfig: ClusterConfig, state: State, newLowestAZ: String, costInAz: Double): Unit = {
     logger.info(s"Switching the AZ for the Cluster ${clusterConfig.name} from ${state.az} to $newLowestAZ")
     logger.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.maxBidPrice}")
     asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
       .withAutoScalingGroupName(clusterConfig.spotASG)
       .withVPCZoneIdentifier(clusterConfig.subnets(newLowestAZ))
     )
-    // TODO - Add support for swapping out to OD as well
-    stateStore.save(clusterConfig.name, state.updateAz(newLowestAZ, costInAz))
+    val newState = state.updateAz(newLowestAZ, costInAz)
+    stateStore.save(clusterConfig.name, newState)
   }
 
   def shutdown(): Unit = {
