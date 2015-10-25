@@ -9,7 +9,7 @@
 - Switch back to Spot once on OD to save money again.
 
 ## Architecture
-![Matsya Architecture](https://raw.githubusercontent.com/ashwanthkumar/matsya/master/docs/matsya-architecture-1.png)
+[![Matsya Architecture](https://raw.githubusercontent.com/ashwanthkumar/matsya/master/docs/matsya-architecture-1.png)](https://docs.google.com/drawings/d/1SGMrtrwjvlZeIdoTjz8tqrsNkRE4jxohllba0totT34/edit?usp=sharing)
 
 ## Configuration
 Sample configuration would be something like
