@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 
 trait Verifier {
   def hasViolated: Boolean
+  def hasViolatedPrice: Boolean
 }
 
 class DefaultVerifier(clusterConfig: ClusterConfig, state: State) extends Verifier {
