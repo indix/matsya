@@ -21,10 +21,10 @@ case class State(name: String,
     clusterMode = ClusterMode.OnDemand)
 
 
-  def isSpot = clusterMode == ClusterMode.Spot
-  def isOD = clusterMode == ClusterMode.OnDemand
+  def onSpot = clusterMode == ClusterMode.Spot
+  def onOD = clusterMode == ClusterMode.OnDemand
 
-  def mode = if(isSpot) "Spot" else "On-Demand"
+  def mode = if(onSpot) "Spot" else "On-Demand"
 }
 
 trait StateStore extends AutoCloseable {

@@ -97,16 +97,16 @@ class Matsya(ec2: AmazonEC2Client,
       val state = stateStore.get(clusterConfig.name)
       val verifier = new DefaultVerifier(clusterConfig, state)
       state match {
-        case s if s.isSpot && verifier.hasViolated =>
+        case s if s.onSpot && verifier.hasViolated =>
           moveToCheapestAZOnSpotIfAvailable(clusterConfig, state, fallbackToOD = clusterConfig.fallBackToOnDemand)
-        case s if s.isSpot && verifier.isPriceViolation =>
+        case s if s.onSpot && verifier.isPriceViolation =>
           logger.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
           notifier.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes}")
           logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.maxBidPrice}")
           stateStore.save(clusterConfig.name, state.crossedThreshold())
-        case s if s.isOD && hasCooledOff(clusterConfig, s) =>
+        case s if s.onOD && hasCooledOff(clusterConfig, s) =>
           moveToCheapestAZOnSpotIfAvailable(clusterConfig, state, fallbackToOD = false)
-        case s if s.isSpot =>
+        case s if s.onSpot =>
           stateStore.save(clusterConfig.name, state.resetCount())
           logger.info(s"CurrentSpotPrice = ${state.price} is within the MaxBidPrice = ${clusterConfig.maxBidPrice} on AZ = ${state.az}")
       }
@@ -182,7 +182,7 @@ class Matsya(ec2: AmazonEC2Client,
   }
 
   def syncFleetSize(clusterConfig: ClusterConfig, state: State): Int = {
-    val asg = if (state.isOD) describeASG(clusterConfig.odASG) else describeASG(clusterConfig.spotASG)
+    val asg = if (state.onOD) describeASG(clusterConfig.odASG) else describeASG(clusterConfig.spotASG)
     asg match {
       case Some(a) => a.getDesiredCapacity
       case _ =>
