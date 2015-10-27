@@ -51,7 +51,7 @@ class Matsya(ec2: AmazonEC2Client,
           }).sortBy(_.timestamp)(implicitly[Ordering[Long]].reverse)
           logger.info(s"${metrics.size} new price points found for $instanceType in $az")
 
-          pushMetricsToHistory(startDate, instanceType, az, metrics)
+          pushPriceChanges(startDate, instanceType, az, metrics)
         })
     }
   }
@@ -80,7 +80,7 @@ class Matsya(ec2: AmazonEC2Client,
       })
   }
 
-  def pushMetricsToHistory(startDate: DateTime, instanceType: String, az: String, metrics: List[Metric]): Unit = {
+  def pushPriceChanges(startDate: DateTime, instanceType: String, az: String, metrics: List[Metric]): Unit = {
     val historySoFar: List[Metric] = timeSeriesStore.get(instanceType, az)
 
     // Always store only latest 100 data points - Do we need more?
