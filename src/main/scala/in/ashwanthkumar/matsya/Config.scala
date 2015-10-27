@@ -20,7 +20,7 @@ case class ClusterConfig(name: String,
                          maxBidPrice: Double,
                          odPrice: Double,
                          fallBackToOnDemand: Boolean,
-                         odCoolOffPeriod: Long) {
+                         odCoolOffPeriodInMillis: Long) {
 
   def allAZs = subnets.keySet
 }
@@ -44,7 +44,7 @@ object ClusterConfig {
       maxBidPrice = config.getDouble("bid-price"),
       odPrice = config.getDouble("od-price"),
       fallBackToOnDemand = fallBackToOD,
-      odCoolOffPeriod = coolOffDuration
+      odCoolOffPeriodInMillis = coolOffDuration
     )
   }
 }

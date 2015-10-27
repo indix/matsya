@@ -9,7 +9,7 @@ class DefaultVerifierTest extends FlatSpec {
     val clusterConfig = testCluster(0.8, 0.420, 0.420, 3, fallBackToOnDemand = true)
 
     val scalar = new DefaultVerifier(clusterConfig, state)
-    scalar.hasViolatedPrice should be(true)
+    scalar.isPriceViolation should be(true)
     scalar.hasViolatedMaxTimes should be(true)
     scalar.hasViolated should be(true)
   }
@@ -19,7 +19,7 @@ class DefaultVerifierTest extends FlatSpec {
     val clusterConfig = testCluster(0.8, 0.420, 0.420, 3, fallBackToOnDemand = true)
 
     val scalar = new DefaultVerifier(clusterConfig, state)
-    scalar.hasViolatedPrice should be(true)
+    scalar.isPriceViolation should be(true)
     scalar.hasViolatedMaxTimes should be(false)
     scalar.hasViolated should be(false)
   }

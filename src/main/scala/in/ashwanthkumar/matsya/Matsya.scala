@@ -22,7 +22,7 @@ class Matsya(ec2: AmazonEC2Client,
 
   private val LAST_RUN_IDENTIFIER = "MatsyaLastRun"
 
-  private val logger = Logger(LoggerFactory.getLogger(classOf[Matsya]))
+  private val logger = Logger(LoggerFactory.getLogger(getClass))
   private val lastRunOn = stateStore.lastRun(LAST_RUN_IDENTIFIER)
   logger.info("Last sync happened on {}", new DateTime(lastRunOn))
 
@@ -71,8 +71,8 @@ class Matsya(ec2: AmazonEC2Client,
             notifier.error("both Spot and OD ASGs are not to be found. We don't create ASGs if not present yet")
             throw new RuntimeException("both Spot and OD ASGs are not to be found. We don't create ASGs if not present yet")
           case (Some(spotASG), Some(odASG)) if spotASG.getDesiredCapacity > 0 && odASG.getDesiredCapacity > 0 =>
-            notifier.error("both Spot and OD ASGs have > 0 as desired capacity")
-            throw new RuntimeException("both Spot and OD ASGs have > 0 as desired capacity")
+            notifier.error("both Spot and OD ASGs have > 0 as desired capacity. Matsya can work with only 1 ASG having desired > 0.")
+            throw new RuntimeException("both Spot and OD ASGs have > 0 as desired capacity. Matsya can work with only 1 ASG having desired > 0.")
         }
         val lastKnownPrice = timeSeriesStore.get(c.machineType, az).maxBy(_.timestamp)
         val state = State(c.name, az, lastKnownPrice.price, nrOfTimes = 0, mode, lastModeChangedTimestamp = 0, System.currentTimeMillis())
@@ -95,45 +95,40 @@ class Matsya(ec2: AmazonEC2Client,
   def monitorClusters(): Unit = {
     config.clusters.foreach(clusterConfig => {
       val state = stateStore.get(clusterConfig.name)
-      if (hasViolatedPrice(clusterConfig, state)) {
-        if (hasViolatedOnDuration(clusterConfig, state)) {
-          thresholdCrossed(clusterConfig, state)
-        } else {
+      val verifier = new DefaultVerifier(clusterConfig, state)
+      state match {
+        case s if s.isSpot && verifier.hasViolated =>
+          moveToCheapestAZOnSpotIfAvailable(clusterConfig, state, fallbackToOD = clusterConfig.fallBackToOnDemand)
+        case s if s.isSpot && verifier.isPriceViolation =>
           logger.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
           notifier.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes}")
           logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.maxBidPrice}")
           stateStore.save(clusterConfig.name, state.crossedThreshold())
-        }
-      } else {
-        stateStore.save(clusterConfig.name, state.resetCount())
-        // The bid price in the current AZ is well within the threshold
-        logger.info(s"CurrentSpotPrice = ${state.price} is within the MaxBidPrice = ${clusterConfig.maxBidPrice} on AZ = ${state.az}")
+        case s if s.isOD && now.getMillis - s.lastModeChangedTimestamp > clusterConfig.odCoolOffPeriodInMillis =>
+          moveToCheapestAZOnSpotIfAvailable(clusterConfig, state, fallbackToOD = false)
+        case s =>
+          stateStore.save(clusterConfig.name, state.resetCount())
+          logger.info(s"CurrentSpotPrice = ${state.price} is within the MaxBidPrice = ${clusterConfig.maxBidPrice} on AZ = ${state.az}")
       }
     })
   }
 
-  def thresholdCrossed(clusterConfig: ClusterConfig, state: State): Unit = {
-    if (state.clusterMode == ClusterMode.Spot) {
-      findCheapestAZForSpot(clusterConfig, state, timeSeriesStore) match {
-        case Some((cheapestAZ, costOnAZ)) =>
-          moveToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
-        case _ =>
-          logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
-          logger.info(s"Switching to OD Mode - Not Implemented yet")
-          notifier.info(s"Switching to OD Mode - Not Implemented yet")
-        // moveToOnDemand(clusterConfig, state)
-      }
-    } else {
-      logger.warn(s"On Demand clusters are crossing the threshold limit on prices. Please check your config for ${clusterConfig.name} cluster")
-      notifier.error(s"On Demand clusters are crossing the threshold limit on prices. Please check your config for ${clusterConfig.name} cluster")
+  def moveToCheapestAZOnSpotIfAvailable(clusterConfig: ClusterConfig, state: State, fallbackToOD: Boolean = false): Unit = {
+    findCheapestAZForSpot(clusterConfig, state, timeSeriesStore) match {
+      case Some((cheapestAZ, costOnAZ)) =>
+        moveToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
+      case None if fallbackToOD =>
+        logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
+        logger.info(s"Switching to OD Mode - Not Implemented yet")
+        notifier.info(s"Switching to OD Mode - Not Implemented yet")
+        moveToOnDemand(clusterConfig, state)
+      case _ =>
+        logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
     }
   }
 
   def moveToOnDemand(clusterConfig: ClusterConfig, state: State): Unit = {
-    val fleetSize: Int = describeASG(clusterConfig.spotASG) match {
-      case Some(asg) => asg.getDesiredCapacity
-      case _ => 0
-    }
+    val fleetSize = syncFleetSize(clusterConfig, state)
     asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
       .withAutoScalingGroupName(clusterConfig.odASG)
       .withDesiredCapacity(fleetSize)
@@ -144,18 +139,7 @@ class Matsya(ec2: AmazonEC2Client,
       .withAutoScalingGroupName(clusterConfig.spotASG)
       .withDesiredCapacity(0)
     )
-  }
-
-  // TODO - Make this pluggable
-  def hasViolatedPrice(clusterConfig: ClusterConfig, state: State): Boolean = {
-    val currentThreshold = state.price / clusterConfig.maxBidPrice
-    logger.info(s"CurrentThreshold = ${math.round(currentThreshold * 100)}%, AcceptableThreshold = ${math.round(clusterConfig.maxThreshold * 100)}%, BidPrice = $$${clusterConfig.maxBidPrice} in AZ = ${state.az}")
-    currentThreshold > clusterConfig.maxThreshold
-  }
-
-  // TODO - Make this pluggable
-  def hasViolatedOnDuration(clusterConfig: ClusterConfig, state: State): Boolean = {
-    (state.nrOfTimes + 1) >= clusterConfig.maxNrOfTimes
+    stateStore.save(clusterConfig.name, state.toOnDemand(clusterConfig.odPrice))
   }
 
   def findCheapestAZForSpot(clusterConfig: ClusterConfig, state: State, timeseriesStore: TimeSeriesStore) = {
@@ -172,17 +156,35 @@ class Matsya(ec2: AmazonEC2Client,
     else None
   }
 
-  def moveToNewAZ(clusterConfig: ClusterConfig, state: State, newLowestAZ: String, costInAz: Double): Unit = {
+  def moveToNewAZ(clusterConfig: ClusterConfig, state: State, newLowestAZ: String, costInNewAZ: Double): Unit = {
     logger.info(s"Switching the AZ for the Cluster ${clusterConfig.name} from ${state.az} to $newLowestAZ")
     notifier.info(s"Switching the AZ for the Cluster ${clusterConfig.name} from ${state.az} to $newLowestAZ")
-    logger.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.maxBidPrice}")
-    notifier.info(s"Cost of new AZ=$costInAz while max bid price is=${clusterConfig.maxBidPrice}")
+    logger.info(s"Cost of new AZ=$costInNewAZ while max bid price is=${clusterConfig.maxBidPrice}")
+    notifier.info(s"Cost of new AZ=$costInNewAZ while max bid price is=${clusterConfig.maxBidPrice}")
+    val fleetSize: Int = syncFleetSize(clusterConfig, state)
+    // Always reset the OD Desired capacity
     asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
       .withAutoScalingGroupName(clusterConfig.spotASG)
       .withVPCZoneIdentifier(clusterConfig.subnets(newLowestAZ))
+      .withDesiredCapacity(fleetSize)
     )
-    val newState = state.updateAz(newLowestAZ, costInAz)
+    asgClient.updateAutoScalingGroup(new UpdateAutoScalingGroupRequest()
+      .withAutoScalingGroupName(clusterConfig.odASG)
+      .withDesiredCapacity(0)
+    )
+    val newState = state.toSpot(newLowestAZ, costInNewAZ)
     stateStore.save(clusterConfig.name, newState)
+  }
+
+  def syncFleetSize(clusterConfig: ClusterConfig, state: State): Int = {
+    val asg = if (state.isOD) describeASG(clusterConfig.odASG) else describeASG(clusterConfig.spotASG)
+    asg match {
+      case Some(a) => a.getDesiredCapacity
+      case _ =>
+        logger.error(s"Can't find any ASG for ${clusterConfig.name} when on ${state.mode}. Going ahead with 0.")
+        notifier.error(s"Can't find any ASG for ${clusterConfig.name} when on ${state.mode}. Go ahead with 0.")
+        0
+    }
   }
 
   def shutdown(): Unit = {

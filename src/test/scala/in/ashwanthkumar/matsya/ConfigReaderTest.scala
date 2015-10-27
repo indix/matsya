@@ -31,7 +31,7 @@ class ConfigReaderTest extends FlatSpec {
       "us-east-1e" -> "subnet-5"
     ))
     cluster.fallBackToOnDemand should be(true)
-    cluster.odCoolOffPeriod should be(45 * 60 * 1000) // in milliseconds
+    cluster.odCoolOffPeriodInMillis should be(45 * 60 * 1000) // in milliseconds
   }
 
 }
