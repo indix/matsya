@@ -92,7 +92,7 @@ class Matsya(ec2: AmazonEC2Client,
     timeSeriesStore.batchPut(instanceType, az, newHistory)
   }
 
-  def monitorClusters(): Unit = {
+  def checkClusters(): Unit = {
     config.clusters.foreach(clusterConfig => {
       val state = stateStore.get(clusterConfig.name)
       val verifier = new DefaultVerifier(clusterConfig, state)
@@ -225,6 +225,6 @@ object MatsyaApp extends App {
 
   system.updatePriceHistory()
   system.syncClusterSettings()
-  system.monitorClusters()
+  system.checkClusters()
   system.shutdown()
 }
