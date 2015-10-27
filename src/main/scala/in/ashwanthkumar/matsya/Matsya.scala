@@ -104,9 +104,9 @@ class Matsya(ec2: AmazonEC2Client,
           notifier.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes}")
           logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.maxBidPrice}")
           stateStore.save(clusterConfig.name, state.crossedThreshold())
-        case s if s.isOD && now.getMillis - s.lastModeChangedTimestamp > clusterConfig.odCoolOffPeriodInMillis =>
+        case s if s.isOD && hasCooledOff(clusterConfig, s) =>
           moveToCheapestAZOnSpotIfAvailable(clusterConfig, state, fallbackToOD = false)
-        case s =>
+        case s if s.isSpot =>
           stateStore.save(clusterConfig.name, state.resetCount())
           logger.info(s"CurrentSpotPrice = ${state.price} is within the MaxBidPrice = ${clusterConfig.maxBidPrice} on AZ = ${state.az}")
       }
@@ -117,13 +117,14 @@ class Matsya(ec2: AmazonEC2Client,
     findCheapestAZForSpot(clusterConfig, state, timeSeriesStore) match {
       case Some((cheapestAZ, costOnAZ)) =>
         moveToNewAZ(clusterConfig, state, cheapestAZ, costOnAZ)
-      case None if fallbackToOD =>
+      case None =>
         logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
-        logger.info(s"Switching to OD Mode - Not Implemented yet")
-        notifier.info(s"Switching to OD Mode - Not Implemented yet")
-        moveToOnDemand(clusterConfig, state)
-      case _ =>
-        logger.warn(s"Can't find a AZ where the spot price is lower than the maxBidPrice ($$${clusterConfig.maxBidPrice})")
+        if (fallbackToOD) {
+          logger.info(s"Moving to On Demand for ${clusterConfig.name}")
+          moveToOnDemand(clusterConfig, state)
+        } else {
+          logger.info("Fallback to OD is disabled or we're already on OD, not trying")
+        }
     }
   }
 
@@ -174,6 +175,10 @@ class Matsya(ec2: AmazonEC2Client,
     )
     val newState = state.toSpot(newLowestAZ, costInNewAZ)
     stateStore.save(clusterConfig.name, newState)
+  }
+
+  def hasCooledOff(clusterConfig: ClusterConfig, s: State): Boolean = {
+    now.getMillis - s.lastModeChangedTimestamp > clusterConfig.odCoolOffPeriodInMillis
   }
 
   def syncFleetSize(clusterConfig: ClusterConfig, state: State): Int = {
