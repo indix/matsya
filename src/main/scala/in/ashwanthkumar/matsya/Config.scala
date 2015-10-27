@@ -1,6 +1,7 @@
 package in.ashwanthkumar.matsya
 
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -18,7 +19,8 @@ case class ClusterConfig(name: String,
                          maxNrOfTimes: Int, // TODO - Should we use duration insted of nr of times? 
                          maxBidPrice: Double,
                          odPrice: Double,
-                         fallBackToOnDemand: Boolean) {
+                         fallBackToOnDemand: Boolean,
+                         odCoolOffPeriod: Long) {
 
   def allAZs = subnets.keySet
 }
@@ -28,6 +30,9 @@ object ClusterConfig {
     val subnetConfigs = config.getConfig("subnets")
     import scala.collection.JavaConversions._
     val subnets = subnetConfigs.entrySet.map(entry => (entry.getKey, entry.getValue.unwrapped().toString)).toMap
+    val fallBackToOD = config.getBoolean("fallback-to-od")
+    val coolOffDuration = if(fallBackToOD) config.getDuration("od-cool-off-period", TimeUnit.MILLISECONDS) else Long.MaxValue
+
     ClusterConfig(
       name = config.getString("name"),
       spotASG = config.getString("spot-asg"),
@@ -38,7 +43,8 @@ object ClusterConfig {
       maxNrOfTimes = config.getInt("nr-of-times"),
       maxBidPrice = config.getDouble("bid-price"),
       odPrice = config.getDouble("od-price"),
-      fallBackToOnDemand = config.getBoolean("fallback-to-od")
+      fallBackToOnDemand = fallBackToOD,
+      odCoolOffPeriod = coolOffDuration
     )
   }
 }

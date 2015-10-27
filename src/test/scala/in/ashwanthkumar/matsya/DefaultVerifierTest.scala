@@ -26,8 +26,9 @@ class DefaultVerifierTest extends FlatSpec {
 
   def testCluster(maxThreshold: Double, maxBidPrice: Double, odPrice: Double,
                   maxNrOfTimesForViolation: Int, fallBackToOnDemand: Boolean): ClusterConfig = {
+    val odCoolOffPeriod = 10 * 60 * 1000 // in millis
     ClusterConfig("foo", "spot-asg", "od-asg", "c3.2xlarge", Map(), maxThreshold, maxNrOfTimesForViolation,
-      maxBidPrice, odPrice, fallBackToOnDemand = fallBackToOnDemand)
+      maxBidPrice, odPrice, fallBackToOnDemand, odCoolOffPeriod)
   }
 
   def testState(price: Double, nrOfTimesViolated: Int): State = {
