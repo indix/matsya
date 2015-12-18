@@ -65,14 +65,15 @@ class Matsya(ec2: AmazonEC2Client,
         val spot = describeASG(c.spotASG)
         val od = describeASG(c.odASG)
         val (az, mode) = (spot, od) match {
-          case (None, Some(odASG)) if odASG.getDesiredCapacity > 0 => (odASG.getAvailabilityZones.asScala.head, ClusterMode.OnDemand)
-          case (Some(spotASG), None) => (spotASG.getAvailabilityZones.asScala.head, ClusterMode.Spot)
           case (None, None) =>
             notifier.error("both Spot and OD ASGs are not to be found. We don't create ASGs if not present yet")
             throw new RuntimeException("both Spot and OD ASGs are not to be found. We don't create ASGs if not present yet")
           case (Some(spotASG), Some(odASG)) if spotASG.getDesiredCapacity > 0 && odASG.getDesiredCapacity > 0 =>
             notifier.error("both Spot and OD ASGs have > 0 as desired capacity. Matsya can work with only 1 ASG having desired > 0.")
             throw new RuntimeException("both Spot and OD ASGs have > 0 as desired capacity. Matsya can work with only 1 ASG having desired > 0.")
+          // TODO - Look into this, If in future we decide to support minOD instances per cluster as a feature
+          case (_, Some(odASG)) if odASG.getDesiredCapacity > 0 => (odASG.getAvailabilityZones.asScala.head, ClusterMode.OnDemand)
+          case (Some(spotASG), _) => (spotASG.getAvailabilityZones.asScala.head, ClusterMode.Spot)
         }
         val lastKnownPrice = timeSeriesStore.get(c.machineType, az).maxBy(_.timestamp)
         val state = State(c.name, az, lastKnownPrice.price, nrOfTimes = 0, mode, lastModeChangedTimestamp = 0, System.currentTimeMillis())
