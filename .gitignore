@@ -1,6 +1,9 @@
 .idea/
 *.iml
 target/
+.DS_Store
+dependency-reduced-pom.xml
+
 ## Created for local dev
 local_run/
 indix-matsya.conf
