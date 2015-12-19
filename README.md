@@ -62,6 +62,11 @@ matsya {
 }
 ```
 
+## Usage
+```
+$ java -cp matsya-<version>.jar in.ashwanthkumar.matsya.MatsyaApp conf/matsya.conf
+```
+
 ## Motivation
 We've a running Hadoop Cluster whose TTs are backed by Auto Scaling Groups (ASG). In order to provide better availability of TTs to our clusters we run these across AZs. We had 2 problems that needed manual intervention
 - We started incurring huge Data Transfer costs
