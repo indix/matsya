@@ -84,6 +84,9 @@ Matsya has 2 features that're missing in Spot Fleets (today)
 - Automatic Fallback to OD
 - Automatic fallback to a single AZ (for the entire set of nodes)
 
+#### Presentations
+- [j.mp/to-matsya](http://j.mp/to-matsya) - Matsya: A new Avatar, as given on Chennai Devops User meetup. 
+
 ## Status
 This project is being actively developed and should be considered alpha quality.
 
