@@ -124,7 +124,7 @@ class Matsya(ec2: AmazonEC2Client,
           logger.info(s"Moving to On Demand for ${clusterConfig.name}")
           moveToOnDemand(clusterConfig, state)
         } else {
-          logger.info("Fallback to OD is disabled or we're already on OD, not trying")
+          logger.error("Fallback to OD is disabled or we're already on OD, not trying")
         }
     }
   }
