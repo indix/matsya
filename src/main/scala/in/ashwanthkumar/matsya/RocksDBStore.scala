@@ -3,7 +3,7 @@ package in.ashwanthkumar.matsya
 import java.io.File
 
 import com.google.common.primitives.Longs
-import org.rocksdb.{Options, RocksDB}
+import org.rocksdb.{FlushOptions, Options, RocksDB}
 
 class RocksDBStore(input: String) extends TimeSeriesStore with StateStore {
 
@@ -37,7 +37,11 @@ class RocksDBStore(input: String) extends TimeSeriesStore with StateStore {
   override def save(name: String, state: State): Unit = {
     delegate.put(bytes(name), JSONUtil.toJSON(state).getBytes)
   }
-  override def close(): Unit = delegate.close()
+  override def close(): Unit = {
+    delegate.flush(new FlushOptions().setWaitForFlush(true))
+    delegate.compactRange()
+    delegate.close()
+  }
 
   override def updateLastRun(identifier: String): Unit = {
     delegate.put(bytes(identifier), Longs.toByteArray(System.currentTimeMillis()))
