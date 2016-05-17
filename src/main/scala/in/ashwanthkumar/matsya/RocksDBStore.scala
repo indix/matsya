@@ -13,6 +13,7 @@ class RocksDBStore(input: String) extends TimeSeriesStore with StateStore {
     val dbOptions = new Options()
       .setCreateIfMissing(true)
       .setMaxBackgroundCompactions(2)
+      .setWalTtlSeconds(86400)
     new File(input).mkdirs
     RocksDB.open(dbOptions, input)
   }
