@@ -95,21 +95,22 @@ class Matsya(ec2: AmazonEC2Client,
 
   def checkClusters(): Unit = {
     config.clusters.foreach(clusterConfig => {
-      val state = stateStore.get(clusterConfig.name)
-      val verifier = new DefaultVerifier(clusterConfig, state)
-      state match {
+      val previousState = stateStore.get(clusterConfig.name)
+      val currentPrice = timeSeriesStore.get(clusterConfig.machineType, previousState.az).maxBy(_.timestamp).price
+      val verifier = new DefaultVerifier(clusterConfig, previousState)
+      previousState.copy(price = currentPrice) match {
         case s if s.onSpot && verifier.hasViolated =>
-          moveToCheapestAZOnSpotIfAvailable(clusterConfig, state, fallbackToOD = clusterConfig.fallBackToOnDemand)
+          moveToCheapestAZOnSpotIfAvailable(clusterConfig, s, fallbackToOD = clusterConfig.fallBackToOnDemand)
         case s if s.onSpot && verifier.isPriceViolation =>
-          logger.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
-          notifier.info(s"${clusterConfig.name} has crossed the threshold ${state.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes}")
-          logger.info(s"Existing price=${state.price} and max bid price=${clusterConfig.maxBidPrice}")
-          stateStore.save(clusterConfig.name, state.crossedThreshold())
+          logger.info(s"${clusterConfig.name} has crossed the threshold ${s.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
+          notifier.info(s"${clusterConfig.name} has crossed the threshold ${s.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes}")
+          logger.info(s"Existing price=${s.price} and max bid price=${clusterConfig.maxBidPrice}")
+          stateStore.save(clusterConfig.name, s.crossedThreshold())
         case s if s.onOD && hasCooledOff(clusterConfig, s) =>
-          moveToCheapestAZOnSpotIfAvailable(clusterConfig, state, fallbackToOD = false)
+          moveToCheapestAZOnSpotIfAvailable(clusterConfig, s, fallbackToOD = false)
         case s if s.onSpot =>
-          stateStore.save(clusterConfig.name, state.resetCount())
-          logger.info(s"CurrentSpotPrice = ${state.price} is within the MaxBidPrice = ${clusterConfig.maxBidPrice} on AZ = ${state.az}")
+          stateStore.save(clusterConfig.name, s.resetCount())
+          logger.info(s"CurrentSpotPrice = ${s.price} is within the MaxBidPrice = ${clusterConfig.maxBidPrice} on AZ = ${s.az}")
       }
     })
   }
