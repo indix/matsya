@@ -22,7 +22,7 @@
     <groupId>in.ashwanthkumar</groupId>
     <artifactId>matsya</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-rc3</version>
+    <version>1.0-rc4-SNAPSHOT</version>
     <name>matsya</name>
 
     <properties>
