@@ -97,8 +97,9 @@ class Matsya(ec2: AmazonEC2Client,
     config.clusters.foreach(clusterConfig => {
       val previousState = stateStore.get(clusterConfig.name)
       val currentPrice = timeSeriesStore.get(clusterConfig.machineType, previousState.az).maxBy(_.timestamp).price
-      val verifier = new DefaultVerifier(clusterConfig, previousState)
-      previousState.copy(price = currentPrice) match {
+      val updatedState = previousState.copy(price = currentPrice)
+      val verifier = new DefaultVerifier(clusterConfig, updatedState)
+      updatedState match {
         case s if s.onSpot && verifier.hasViolated =>
           moveToCheapestAZOnSpotIfAvailable(clusterConfig, s, fallbackToOD = clusterConfig.fallBackToOnDemand)
         case s if s.onSpot && verifier.isPriceViolation =>
