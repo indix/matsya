@@ -103,8 +103,9 @@ class Matsya(ec2: AmazonEC2Client,
         case s if s.onSpot && verifier.hasViolated =>
           moveToCheapestAZOnSpotIfAvailable(clusterConfig, s, fallbackToOD = clusterConfig.fallBackToOnDemand)
         case s if s.onSpot && verifier.isPriceViolation =>
-          logger.info(s"${clusterConfig.name} has crossed the threshold ${s.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes} ")
-          notifier.info(s"${clusterConfig.name} has crossed the threshold ${s.nrOfTimes + 1} times so far out of ${clusterConfig.maxNrOfTimes}")
+          val thresholdMessage = s"${clusterConfig.name} has crossed the threshold ${s.nrOfTimes + 1}/${clusterConfig.maxNrOfTimes} times"
+          logger.info(thresholdMessage)
+          notifier.info(thresholdMessage)
           logger.info(s"Existing price=${s.price} and max bid price=${clusterConfig.maxBidPrice}")
           stateStore.save(clusterConfig.name, s.crossedThreshold())
         case s if s.onOD && hasCooledOff(clusterConfig, s) =>
