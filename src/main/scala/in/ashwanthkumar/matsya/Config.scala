@@ -52,7 +52,6 @@ object ClusterConfig {
 case class MatsyaConfig(clusters: List[ClusterConfig], workingDir: String, slackWebHook: Option[String]) {
   def stateDir = workingDir + "/" + "state"
   def historyDir = workingDir + "/" + "history"
-  def getRegion = "us-east-1"
 
   def machineTypes = clusters.map(_.machineType).toSet
 }
