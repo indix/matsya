@@ -11,7 +11,7 @@ class ClusterConfigTest extends FlatSpec {
 
   "ClusterConfig Object" should "create ClusterConfig from config " in {
 
-    val config = ConfigFactory.parseFile(new File("src/test/resources/test-cluster-config.conf"))
+    val config = ConfigFactory.parseURL(this.getClass.getResource("/test-cluster-config.conf"))
 
     val actualClusterConfig = ClusterConfig.from(config)
 
@@ -32,7 +32,7 @@ class ClusterConfigTest extends FlatSpec {
       "us-east-1e" -> "subnet-5",
       "us-east-1b" -> "subnet-2")
 
-    actualClusterConfig.subnets should be (expectedSubnetsMap)
+    actualClusterConfig.subnets should be(expectedSubnetsMap)
 
   }
 
