@@ -1,4 +1,4 @@
-package in.ashwanthkumar.matsya
+package com.indix.matsya
 
 import org.scalatest.FlatSpec
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper}

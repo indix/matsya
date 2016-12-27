@@ -1,4 +1,4 @@
-package in.ashwanthkumar.matsya
+package com.indix.matsya
 
 object ClusterMode {
   val Spot = 1

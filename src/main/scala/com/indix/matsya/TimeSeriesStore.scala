@@ -1,4 +1,4 @@
-package in.ashwanthkumar.matsya
+package com.indix.matsya
 
 case class Metric(machineType: String,
                   az: String,
