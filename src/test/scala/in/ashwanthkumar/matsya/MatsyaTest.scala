@@ -2,6 +2,7 @@ package in.ashwanthkumar.matsya
 
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient
 import com.amazonaws.services.ec2.AmazonEC2Client
+import com.indix.matsya._
 import org.joda.time.{DateTime, DateTimeUtils}
 import org.mockito.Mockito.{mock, when}
 import org.scalatest.FlatSpec

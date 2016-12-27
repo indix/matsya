@@ -2,6 +2,7 @@ package in.ashwanthkumar.matsya
 
 import java.io.File
 
+import com.indix.matsya.ClusterConfig
 import com.typesafe.config.ConfigFactory
 import org.scalatest.FlatSpec
 import org.scalatest.Matchers.{be, convertToAnyShouldWrapper}
