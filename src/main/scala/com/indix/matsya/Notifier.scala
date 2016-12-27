@@ -1,4 +1,4 @@
-package in.ashwanthkumar.matsya
+package com.indix.matsya
 
 import in.ashwanthkumar.slack.webhook.{Slack, SlackMessage}
 

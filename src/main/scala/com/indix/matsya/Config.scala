@@ -1,4 +1,4 @@
-package in.ashwanthkumar.matsya
+package com.indix.matsya
 
 import java.io.File
 import java.util.concurrent.TimeUnit
